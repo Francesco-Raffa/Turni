@@ -205,8 +205,10 @@
       background: rgba(2,6,23,.03);
     }
 
+	
     /* MOBILE card layout */
-    @media (max-width: 576px) {
+    @media (max-width: 576px) and (hover: none) and (pointer: coarse) {
+
       h1 { font-size: 1.4rem; }
 
       button, .btn {
@@ -250,6 +252,57 @@
       input[type="date"], select { max-width: 55%; font-size: 0.9rem; }
       .small, .hint { font-size: 0.75rem; opacity: 0.75; }
     }
+	
+	/* ===== DESKTOP FORCE: la tabella deve restare una tabella ===== */
+@media (min-width: 992px) {
+  #t { display: table !important; width: 100% !important; table-layout: auto !important; }
+  #t thead { display: table-header-group !important; }
+  #t tbody { display: table-row-group !important; }
+  #t tr { display: table-row !important; width: auto !important; }
+  #t th, #t td { 
+    display: table-cell !important;
+    width: auto !important;
+    max-width: none !important;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  /* disattiva etichette "card" */
+  #t td::before { content: none !important; }
+
+  /* il wrapper non deve “spostare” cose strane */
+  .table-responsive { overflow-x: auto !important; }
+}
+	/* ===== FIX SELECT COLOR (dark / light) ===== */
+
+/* default (dark theme) */
+.form-select,
+.form-control {
+  color: #fff !important;
+}
+
+/* dropdown options */
+.form-select option {
+  color: #111 !important;
+  background: #fff !important;
+}
+
+/* LIGHT THEME */
+html[data-bs-theme="light"] .form-select,
+html[data-bs-theme="light"] .form-control {
+  color: #111 !important;
+  background-color: rgba(255,255,255,.85) !important;
+  border-color: rgba(2,6,23,.15) !important;
+}
+
+/* focus */
+.form-select:focus,
+.form-control:focus {
+  box-shadow: 0 0 0 .25rem rgba(99,102,241,.20) !important;
+}
+
+	
+	
   </style>
 </head>
 
@@ -298,10 +351,10 @@
             <table id="t" class="table table-hover align-middle mb-0">
               <thead>
                 <tr>
-                  <th style="min-width: 160px;">Data</th>
-                  <th style="min-width: 220px;">Chi è andato</th>
-                  <th style="min-width: 200px;">Deve recuperare (giorno dopo)</th>
-                  <th class="small" style="min-width: 200px;">Turno teorico (info)</th>
+                  <th style="width: 160px;">Data</th>
+                  <th style="width: 220px;">Chi è andato</th>
+                  <th style="width: 200px;">Deve recuperare (giorno dopo)</th>
+                  <th class="small" style="width: 200px;">Turno teorico (info)</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -437,71 +490,96 @@
     inpDate.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
   }
 
-  function recalc() {
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    const debtShown = new Array(rows.length).fill("");
+function recalc() {
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+  const debtShown = new Array(rows.length).fill("");
 
-    let currentDebt = { n: 0, who: null };
+  // debito corrente (che verrà mostrato sulla riga successiva)
+  let currentDebt = { n: 0, who: null };
 
-    for (let i = 0; i < rows.length; i++) {
-      const excelRowNumber = i + 2;
-      const teorico = turnoTeoricoByRowIndex(excelRowNumber);
+  for (let i = 0; i < rows.length; i++) {
+    const excelRowNumber = i + 2; // prima riga dati = riga 2
+    const teorico = turnoTeoricoByRowIndex(excelRowNumber);
+    rows[i].children[3].textContent = `🧭 Teorico: ${teorico}`;
 
-      rows[i].children[3].textContent = `🧭 Teorico: ${teorico}`;
+    const dateVal = rows[i].children[0].querySelector("input").value;
+    const whoVal  = rows[i].children[1].querySelector("select").value;
 
-      const who = rows[i].children[1].querySelector("select").value;
+    const rowEmpty = !dateVal && !whoVal;
 
+    let prevEmpty = false;
+    if (i > 0) {
+      const prevDate = rows[i-1].children[0].querySelector("input").value;
+      const prevWho  = rows[i-1].children[1].querySelector("select").value;
+      prevEmpty = !prevDate && !prevWho;
+    }
+
+    // Mostra il debito sempre sulla riga "giorno dopo",
+    // ma se ci sono righe vuote consecutive, mostrala solo sulla prima.
+    if (rowEmpty && prevEmpty) {
+      debtShown[i] = "";
+    } else {
       debtShown[i] = (i >= 1) ? formatDebt(currentDebt) : "";
+    }
 
-      if (!who) continue;
-      if (NEUTRI.has(who)) continue;
+    // Se non c'è una persona selezionata, non aggiornare il debito
+    if (!whoVal) continue;
 
-      const expected = teorico;
+    // Giorni neutri: non contano e non spezzano l’alternanza
+    if (NEUTRI.has(whoVal)) continue;
 
-      if (who === expected) {
-        // turno normale: non modifica il debito
+    const expected = teorico;
+
+    if (whoVal === expected) {
+      // Turno normale: non modifica il debito
+    } else {
+      // Turno dell'altro: o recupero o furto
+      const whoLetter = letterFromName(whoVal);
+
+      if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
+        // RECUPERO
+        currentDebt.n -= 1;
+        if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
       } else {
-        const whoLetter = letterFromName(who);
-
-        if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
-          currentDebt.n -= 1;
-          if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
+        // FURTO: crea debito per l'altro
+        const debtFor = otherLetterFromName(whoVal);
+        if (currentDebt.n > 0 && currentDebt.who === debtFor) {
+          currentDebt.n += 1;
         } else {
-          const debtFor = otherLetterFromName(who);
-          if (currentDebt.n > 0 && currentDebt.who === debtFor) {
-            currentDebt.n += 1;
-          } else {
-            currentDebt = { n: 1, who: debtFor };
-          }
+          currentDebt = { n: 1, who: debtFor };
         }
       }
     }
-
-    for (let i = 0; i < rows.length; i++) {
-      const txt = debtShown[i];
-      const tdC = rows[i].children[2];
-
-      // aggiorna solo se cambia (così l’animazione si vede meglio)
-      const prev = tdC.getAttribute("data-prev") || "";
-      if (prev !== txt) {
-        tdC.innerHTML = makeDebtBadge(txt);
-        tdC.setAttribute("data-prev", txt);
-      } else {
-        // se uguale, mantieni
-        if (!txt) tdC.innerHTML = "";
-      }
-
-      rows[i].classList.toggle("has-debt", !!txt);
-    }
   }
 
-  function collectRows() {
-    return Array.from(tbody.querySelectorAll("tr")).map(tr => {
+  // Scrivi colonna C + highlight riga
+  for (let i = 0; i < rows.length; i++) {
+    const txt = debtShown[i];
+    const tdC = rows[i].children[2];
+
+    const prev = tdC.getAttribute("data-prev") || "";
+    if (prev !== txt) {
+      tdC.innerHTML = makeDebtBadge(txt);
+      tdC.setAttribute("data-prev", txt);
+    } else {
+      if (!txt) tdC.innerHTML = "";
+    }
+
+    rows[i].classList.toggle("has-debt", !!txt);
+  }
+}
+
+
+function collectRows() {
+  return Array.from(tbody.querySelectorAll("tr"))
+    .map(tr => {
       const date = tr.children[0].querySelector("input").value || "";
       const who  = tr.children[1].querySelector("select").value || "";
       return { date, who };
-    });
-  }
+    })
+    .filter(r => r.date || r.who); // salva solo righe usate
+}
+
 
   function applyRows(rows) {
     tbody.innerHTML = "";
