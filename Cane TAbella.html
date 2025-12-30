@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Turni & Debiti</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+    h1 { margin: 0 0 10px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px; }
+    button { padding: 8px 12px; cursor:pointer; }
+    table { border-collapse: collapse; width: 100%; max-width: 900px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
+    th { background:#f4f4f4; }
+    input, select { width: 100%; padding: 6px; box-sizing:border-box; }
+    .note { color:#555; margin-top: 10px; max-width: 900px; }
+    .small { font-size: 12px; color:#666; }
+  </style>
+</head>
+<body>
+  <h1>Turni (Lorenzo/Francesco) + Debiti</h1>
+
+  <div class="row">
+    <button id="addRow">Aggiungi riga</button>
+    <button id="recalc">Ricalcola</button>
+    <button id="clear">Svuota</button>
+  </div>
+
+  <table id="t">
+    <thead>
+      <tr>
+        <th style="width: 160px;">Data</th>
+        <th style="width: 220px;">Chi è andato</th>
+        <th style="width: 160px;">Deve recuperare (giorno dopo)</th>
+        <th class="small">Turno teorico (info)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p class="note">
+    Regola chiave: la colonna <b>C</b> della riga <i>i</i> dipende dalla scelta fatta in <b>B</b> della riga <i>i-1</i>.
+    I giorni neutri non contano e non spezzano l’alternanza.
+  </p>
+
+<script>
+(function () {
+  const NEUTRI = new Set(["Campagna", "Mamma", "Zia", "Nonni"]);
+  const PERSONE = ["Lorenzo", "Francesco", "Campagna", "Mamma", "Zia", "Nonni"];
+
+  const tbody = document.querySelector("#t tbody");
+  const btnAdd = document.querySelector("#addRow");
+  const btnRecalc = document.querySelector("#recalc");
+  const btnClear = document.querySelector("#clear");
+
+  function turnoTeoricoByRowIndex(rowNumber1Based) {
+    // Regola: Riga 2 = Lorenzo, Riga 3 = Francesco, Riga 4 = Lorenzo...
+    // Se consideriamo rowNumber1Based come numero riga Excel-like:
+    // pari => Lorenzo, dispari => Francesco (da riga 2 in poi)
+    return (rowNumber1Based % 2 === 0) ? "Lorenzo" : "Francesco";
+  }
+
+  function parseDebt(s) {
+    // "" -> {n:0, who:null}
+    // "2L" -> {n:2, who:"L"}
+    // "1F" -> {n:1, who:"F"}
+    if (!s) return { n: 0, who: null };
+    const m = String(s).trim().match(/^(\d+)\s*([LF])$/i);
+    if (!m) return { n: 0, who: null };
+    return { n: parseInt(m[1], 10), who: m[2].toUpperCase() };
+  }
+
+  function formatDebt(d) {
+    if (!d || d.n <= 0 || !d.who) return "";
+    return String(d.n) + d.who;
+  }
+
+  function otherLetterFromName(name) {
+    // se Lorenzo ruba -> deve recuperare Francesco => "F"
+    // se Francesco ruba -> deve recuperare Lorenzo => "L"
+    if (name === "Lorenzo") return "F";
+    if (name === "Francesco") return "L";
+    return null;
+  }
+
+  function letterFromName(name) {
+    if (name === "Lorenzo") return "L";
+    if (name === "Francesco") return "F";
+    return null;
+  }
+
+  function addRow(data = "", who = "") {
+    const tr = document.createElement("tr");
+
+    const tdA = document.createElement("td");
+    const inpDate = document.createElement("input");
+    inpDate.type = "date";
+    inpDate.value = data;
+    tdA.appendChild(inpDate);
+
+    const tdB = document.createElement("td");
+    const sel = document.createElement("select");
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = "—";
+    sel.appendChild(optEmpty);
+    for (const p of PERSONE) {
+      const o = document.createElement("option");
+      o.value = p;
+      o.textContent = p;
+      sel.appendChild(o);
+    }
+    sel.value = who;
+    tdB.appendChild(sel);
+
+    const tdC = document.createElement("td");
+    tdC.textContent = "";
+
+    const tdInfo = document.createElement("td");
+    tdInfo.className = "small";
+    tdInfo.textContent = "";
+
+    tr.appendChild(tdA);
+    tr.appendChild(tdB);
+    tr.appendChild(tdC);
+    tr.appendChild(tdInfo);
+
+    tbody.appendChild(tr);
+
+    sel.addEventListener("change", recalc);
+    inpDate.addEventListener("change", recalc);
+  }
+
+  function recalc() {
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    // C1 e C2 concettualmente vuote: la prima riga che "mostra" debito è C3 (dipende da B2)
+    // Qui useremo un array debtAfter[i] = debito (string) mostrato in C della riga i (0-based)
+    const debtShown = new Array(rows.length).fill("");
+
+    // Stato del debito "corrente" (quello che andrà mostrato il giorno dopo)
+    let currentDebt = { n: 0, who: null };
+
+    // Recorriamo le righe: la scelta B della riga i aggiorna currentDebt,
+    // e questo verrà mostrato in C della riga i+1.
+    for (let i = 0; i < rows.length; i++) {
+      const excelRowNumber = i + 2; // perché la prima riga dati è "riga 2" (come in Excel)
+      const teorico = turnoTeoricoByRowIndex(excelRowNumber);
+
+      // aggiorna colonna info
+      rows[i].children[3].textContent = `Teorico: ${teorico}`;
+
+      const who = rows[i].children[1].querySelector("select").value;
+
+      // Mostra in questa riga il debito calcolato dal giorno prima
+      if (i >= 1) debtShown[i] = formatDebt(currentDebt);
+      else debtShown[i] = ""; // C2 concettualmente vuota
+
+      // Se B è vuoto: non cambiare nulla
+      if (!who) continue;
+
+      // Giorni neutri: non cambiano nulla e non spezzano alternanza (teorico resta basato su riga)
+      if (NEUTRI.has(who)) continue;
+
+      // Solo Lorenzo/Francesco
+      const expected = teorico;
+
+      if (who === expected) {
+  // Turno normale: non cambia il debito
+} else {
+  // Chi è andato NON è quello previsto:
+  // se è lui quello "in debito", allora sta RECUPERANDO -> diminuisce
+  const whoLetter = letterFromName(who);
+
+  if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
+    // RECUPERO
+    currentDebt.n -= 1;
+    if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
+  } else {
+    // FURTO (crea debito per l'altro)
+    const debtFor = otherLetterFromName(who);
+    if (currentDebt.n > 0 && currentDebt.who === debtFor) {
+      currentDebt.n += 1;
+    } else {
+      currentDebt = { n: 1, who: debtFor };
+    }
+  }
+}
+
+    }
+
+    // Scrivi la colonna C
+    for (let i = 0; i < rows.length; i++) {
+      rows[i].children[2].textContent = debtShown[i];
+    }
+  }
+
+  function clearAll() {
+    tbody.innerHTML = "";
+    // crea 10 righe iniziali
+    for (let i = 0; i < 10; i++) addRow();
+    recalc();
+  }
+
+  btnAdd.addEventListener("click", () => { addRow(); recalc(); });
+  btnRecalc.addEventListener("click", recalc);
+  btnClear.addEventListener("click", clearAll);
+
+  // start
+  clearAll();
+})();
+</script>
+</body>
+</html>
