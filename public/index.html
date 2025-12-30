@@ -1,52 +1,339 @@
 <!doctype html>
-<html lang="it">
+<html lang="it" data-bs-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Turni & Debiti</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-    h1 { margin: 0 0 10px; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px; align-items:center; }
-    button { padding: 8px 12px; cursor:pointer; }
-    table { border-collapse: collapse; width: 100%; max-width: 900px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
-    th { background:#f4f4f4; }
-    input, select { width: 100%; padding: 6px; box-sizing:border-box; }
-    .note { color:#555; margin-top: 10px; max-width: 900px; }
-    .small { font-size: 12px; color:#666; }
-    .status { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; }
+    /* Futuristic vibe */
+    body{
+      background:
+        radial-gradient(1200px 700px at 20% 10%, rgba(99,102,241,.25), transparent 55%),
+        radial-gradient(900px 600px at 85% 15%, rgba(16,185,129,.18), transparent 55%),
+        radial-gradient(900px 700px at 50% 90%, rgba(236,72,153,.14), transparent 60%),
+        linear-gradient(180deg, rgba(10,10,18,1), rgba(6,6,12,1));
+      min-height: 100vh;
+    }
+
+    .glass {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 20px 60px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+    }
+
+    .neon {
+      text-shadow: 0 0 18px rgba(99,102,241,.45);
+      letter-spacing: .3px;
+    }
+
+    .hint { color: rgba(255,255,255,.70); }
+
+    .table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: rgba(20,20,30,.92) !important;
+      border-bottom: 1px solid rgba(255,255,255,.12) !important;
+    }
+    .table td, .table th { border-color: rgba(255,255,255,.10) !important; }
+
+    .form-control, .form-select {
+      background-color: rgba(255,255,255,.06) !important;
+      border-color: rgba(255,255,255,.15) !important;
+      color: inherit !important;
+    }
+    .form-control:focus, .form-select:focus {
+      border-color: rgba(99,102,241,.55) !important;
+      box-shadow: 0 0 0 .25rem rgba(99,102,241,.20) !important;
+    }
+
+    /* ===== Status badge: futuristico + spinner ===== */
+    .badge-status {
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.06);
+      position: relative;
+      overflow: hidden;
+    }
+    .badge-status::after{
+      content:"";
+      position:absolute; inset:-120% -40%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+      transform: rotate(20deg);
+      animation: sheen 4.5s linear infinite;
+      opacity: .35;
+      pointer-events:none;
+    }
+    @keyframes sheen{
+      0%{ transform: translateX(-55%) rotate(20deg); }
+      100%{ transform: translateX(55%) rotate(20deg); }
+    }
+    .status-dot{
+      width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:.45rem;
+      background: rgba(16,185,129,.95);
+      box-shadow: 0 0 18px rgba(16,185,129,.35);
+      vertical-align: middle;
+    }
+    .status-saving .status-dot{
+      background: rgba(99,102,241,.95);
+      box-shadow: 0 0 18px rgba(99,102,241,.35);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    .status-error .status-dot{
+      background: rgba(239,68,68,.95);
+      box-shadow: 0 0 18px rgba(239,68,68,.35);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    /* ===== Debito badge: neon + scanline ===== */
+    .debt-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:.45rem;
+      padding:.26rem .65rem;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.06);
+      font-weight: 800;
+      letter-spacing: .4px;
+      position: relative;
+      overflow:hidden;
+      transform: translateZ(0);
+    }
+    .debt-badge::after{
+      content:"";
+      position:absolute; left:-40%; top:-50%;
+      width: 40%; height: 200%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
+      transform: rotate(20deg);
+      animation: scan 2.8s linear infinite;
+      opacity:.25;
+      pointer-events:none;
+    }
+    @keyframes scan{
+      0%{ transform: translateX(-20%) rotate(20deg); }
+      100%{ transform: translateX(380%) rotate(20deg); }
+    }
+
+    .debt-dot{
+      width:8px; height:8px; border-radius:99px;
+      display:inline-block;
+      opacity:.95;
+    }
+
+    .debt-L{
+      border-color: rgba(99,102,241,.55);
+      box-shadow: 0 0 26px rgba(99,102,241,.16);
+    }
+    .debt-L .debt-dot{ background: rgba(99,102,241,.95); }
+
+    .debt-F{
+      border-color: rgba(236,72,153,.55);
+      box-shadow: 0 0 26px rgba(236,72,153,.14);
+    }
+    .debt-F .debt-dot{ background: rgba(236,72,153,.95); }
+
+    .debt-fire{
+      margin-left:.2rem;
+      filter: drop-shadow(0 0 10px rgba(255,180,0,.35));
+      animation: flicker 1.2s ease-in-out infinite;
+    }
+    @keyframes flicker{
+      0%, 100%{ transform: translateY(0); opacity: .95;}
+      50%{ transform: translateY(-1px); opacity: .75;}
+    }
+
+    /* ===== Row glow when has debt ===== */
+    tr.has-debt{
+      position: relative;
+      background: rgba(255,255,255,.03);
+    }
+    tr.has-debt::before{
+      content:"";
+      position:absolute; inset:0;
+      pointer-events:none;
+      background: radial-gradient(900px 80px at 15% 50%, rgba(99,102,241,.14), transparent 60%),
+                  radial-gradient(900px 80px at 85% 50%, rgba(236,72,153,.10), transparent 60%);
+      opacity: .65;
+    }
+
+    /* ===== Small animation when debt changes ===== */
+    .pop{
+      animation: pop .22s ease-out;
+    }
+    @keyframes pop{
+      0%{ transform: scale(.96); opacity:.7; }
+      100%{ transform: scale(1); opacity:1; }
+    }
+
+    @keyframes pulse{
+      0%{ transform: scale(1); opacity:1; }
+      50%{ transform: scale(1.25); opacity:.65; }
+      100%{ transform: scale(1); opacity:1; }
+    }
+
+    /* Light theme background */
+    html[data-bs-theme="light"] body{
+      background:
+        radial-gradient(1200px 700px at 20% 10%, rgba(59,130,246,.18), transparent 55%),
+        radial-gradient(900px 600px at 85% 15%, rgba(16,185,129,.12), transparent 55%),
+        radial-gradient(900px 700px at 50% 90%, rgba(236,72,153,.10), transparent 60%),
+        linear-gradient(180deg, rgba(248,250,252,1), rgba(241,245,249,1));
+    }
+    html[data-bs-theme="light"] .glass{
+      background: rgba(255,255,255,.75);
+      border: 1px solid rgba(2,6,23,.10);
+      box-shadow: 0 20px 60px rgba(2,6,23,.10);
+    }
+    html[data-bs-theme="light"] .hint{ color: rgba(2,6,23,.65); }
+    html[data-bs-theme="light"] .table thead th{
+      background: rgba(248,250,252,.92) !important;
+      border-bottom: 1px solid rgba(2,6,23,.10) !important;
+    }
+    html[data-bs-theme="light"] .badge-status{
+      border-color: rgba(2,6,23,.12);
+      background: rgba(2,6,23,.03);
+    }
+    html[data-bs-theme="light"] .debt-badge{
+      background: rgba(2,6,23,.04);
+      border-color: rgba(2,6,23,.12);
+    }
+    html[data-bs-theme="light"] tr.has-debt{
+      background: rgba(2,6,23,.03);
+    }
+
+    /* MOBILE card layout */
+    @media (max-width: 576px) {
+      h1 { font-size: 1.4rem; }
+
+      button, .btn {
+        width: 100%;
+        font-size: 0.95rem;
+        padding: 0.6rem 0.8rem;
+      }
+
+      .btn-group { width: 100%; }
+      .btn-group .btn { width: 50%; }
+
+      #status { width: 100%; text-align: center; margin-top: 0.5rem; }
+
+      table thead { display: none; }
+
+      table tbody tr {
+        display: block;
+        margin-bottom: 1rem;
+        border-radius: 0.8rem;
+        background: rgba(255,255,255,.06);
+        border: 1px solid rgba(255,255,255,.12);
+        padding: 0.6rem;
+      }
+
+      table tbody td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.45rem 0;
+        border: none !important;
+        font-size: 0.9rem;
+      }
+
+      table tbody td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        opacity: 0.85;
+        margin-right: 0.5rem;
+      }
+
+      input[type="date"], select { max-width: 55%; font-size: 0.9rem; }
+      .small, .hint { font-size: 0.75rem; opacity: 0.75; }
+    }
   </style>
 </head>
+
 <body>
-  <h1>Turni (Lorenzo/Francesco) + Debiti</h1>
+  <div class="container py-4 py-md-5">
+    <div class="row justify-content-center">
+      <div class="col-12 col-xl-10">
 
-  <div class="row">
-    <button id="addRow">Aggiungi riga</button>
-    <button id="recalc">Ricalcola</button>
-    <button id="clear">Svuota</button>
-    <span id="status" class="status">Pronto</span>
+        <div class="glass rounded-4 p-3 p-md-4 mb-3">
+          <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+            <div>
+              <h1 class="h3 h2-md mb-1 neon">Turni & Debiti</h1>
+              <div class="hint small">
+                Alternanza teorica + debiti/recuperi. La colonna “Deve recuperare” appare <b>il giorno dopo</b>.
+              </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <div class="btn-group" role="group" aria-label="Tema">
+                <button id="themeDark" class="btn btn-sm btn-outline-light">🌙 Dark</button>
+                <button id="themeLight" class="btn btn-sm btn-outline-light">☀️ Light</button>
+              </div>
+
+              <span id="status" class="badge badge-status rounded-pill px-3 py-2">
+                <span id="statusDot" class="status-dot"></span>
+                <span id="statusText">Pronto</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button id="addRow" class="btn btn-primary">
+              ✚ Aggiungi riga
+            </button>
+            <button id="recalc" class="btn btn-outline-info">
+              🧠 Ricalcola
+            </button>
+            <button id="clear" class="btn btn-outline-danger">
+              🧹 Svuota
+            </button>
+          </div>
+        </div>
+
+        <div class="glass rounded-4 p-2 p-md-3">
+          <div class="table-responsive">
+            <table id="t" class="table table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style="min-width: 160px;">Data</th>
+                  <th style="min-width: 220px;">Chi è andato</th>
+                  <th style="min-width: 200px;">Deve recuperare (giorno dopo)</th>
+                  <th class="small" style="min-width: 200px;">Turno teorico (info)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="px-2 px-md-1 pt-3">
+            <p class="hint small mb-0">
+              Regola chiave: la colonna <b>C</b> della riga <i>i</i> dipende dalla scelta fatta in <b>B</b> della riga <i>i-1</i>.
+              I giorni neutri non contano e non spezzano l’alternanza.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
-
-  <table id="t">
-    <thead>
-      <tr>
-        <th style="width: 160px;">Data</th>
-        <th style="width: 220px;">Chi è andato</th>
-        <th style="width: 180px;">Deve recuperare (giorno dopo)</th>
-        <th class="small">Turno teorico (info)</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <p class="note">
-    Regola chiave: la colonna <b>C</b> della riga <i>i</i> dipende dalla scelta fatta in <b>B</b> della riga <i>i-1</i>.
-    I giorni neutri non contano e non spezzano l’alternanza.
-  </p>
 
 <script>
 (function () {
+  // ======== THEME (solo grafica, non tocca la logica) ========
+  function setTheme(t){
+    document.documentElement.setAttribute("data-bs-theme", t);
+    try { localStorage.setItem("theme", t); } catch {}
+  }
+  document.getElementById("themeDark").addEventListener("click", () => setTheme("dark"));
+  document.getElementById("themeLight").addEventListener("click", () => setTheme("light"));
+  try {
+    const saved = localStorage.getItem("theme");
+    if (saved === "light" || saved === "dark") setTheme(saved);
+  } catch {}
+
   // === CONFIG API (Vercel) ===
   const API_URL = "/api/data";
 
@@ -58,11 +345,18 @@
   const btnRecalc = document.querySelector("#recalc");
   const btnClear = document.querySelector("#clear");
   const statusEl = document.querySelector("#status");
+  const statusTextEl = document.querySelector("#statusText");
+  const statusDotEl = document.querySelector("#statusDot");
 
-  function setStatus(txt) { statusEl.textContent = txt; }
+  function setStatus(txt, mode) {
+    // mode: "ready" | "saving" | "error" | "saved"
+    statusTextEl.textContent = txt;
+    statusEl.classList.remove("status-saving","status-error");
+    if (mode === "saving") statusEl.classList.add("status-saving");
+    if (mode === "error") statusEl.classList.add("status-error");
+  }
 
   function turnoTeoricoByRowIndex(rowNumber1Based) {
-    // Riga 2 = Lorenzo, Riga 3 = Francesco, Riga 4 = Lorenzo...
     return (rowNumber1Based % 2 === 0) ? "Lorenzo" : "Francesco";
   }
 
@@ -72,8 +366,6 @@
   }
 
   function otherLetterFromName(name) {
-    // Se Lorenzo ruba -> deve recuperare Francesco => "F"
-    // Se Francesco ruba -> deve recuperare Lorenzo => "L"
     if (name === "Lorenzo") return "F";
     if (name === "Francesco") return "L";
     return null;
@@ -85,17 +377,32 @@
     return null;
   }
 
+  function makeDebtBadge(txt){
+    if (!txt) return "";
+    const who = txt.slice(-1); // L o F
+    const n = parseInt(txt.slice(0, -1), 10) || 0;
+    const cls = who === "L" ? "debt-badge debt-L" : "debt-badge debt-F";
+    const safe = String(txt).replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const fire = (n >= 3) ? `<span class="debt-fire">🔥</span>` : "";
+    const icon = (who === "L") ? "🅻" : "🅵";
+    return `<span class="${cls} pop"><span class="debt-dot"></span>${icon} ${safe}${fire}</span>`;
+  }
+
   function addRow(data = "", who = "") {
     const tr = document.createElement("tr");
 
     const tdA = document.createElement("td");
+    tdA.setAttribute("data-label", "📅 Data");
     const inpDate = document.createElement("input");
     inpDate.type = "date";
     inpDate.value = data;
+    inpDate.className = "form-control form-control-sm";
     tdA.appendChild(inpDate);
 
     const tdB = document.createElement("td");
+    tdB.setAttribute("data-label", "👤 Chi è andato");
     const sel = document.createElement("select");
+    sel.className = "form-select form-select-sm";
     const optEmpty = document.createElement("option");
     optEmpty.value = "";
     optEmpty.textContent = "—";
@@ -110,10 +417,13 @@
     tdB.appendChild(sel);
 
     const tdC = document.createElement("td");
-    tdC.textContent = "";
+    tdC.setAttribute("data-label", "🧾 Deve recuperare");
+    tdC.innerHTML = "";
+    tdC.className = "fw-semibold";
 
     const tdInfo = document.createElement("td");
-    tdInfo.className = "small";
+    tdInfo.setAttribute("data-label", "🧭 Teorico");
+    tdInfo.className = "small hint";
     tdInfo.textContent = "";
 
     tr.appendChild(tdA);
@@ -127,48 +437,36 @@
     inpDate.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
   }
 
-  // === CALCOLO DEBITI (REGOLA "GIORNO DOPO") ===
   function recalc() {
     const rows = Array.from(tbody.querySelectorAll("tr"));
     const debtShown = new Array(rows.length).fill("");
 
-    // debito corrente (che verrà mostrato sulla riga successiva)
     let currentDebt = { n: 0, who: null };
 
     for (let i = 0; i < rows.length; i++) {
-      const excelRowNumber = i + 2; // prima riga dati = riga 2
+      const excelRowNumber = i + 2;
       const teorico = turnoTeoricoByRowIndex(excelRowNumber);
 
-      rows[i].children[3].textContent = `Teorico: ${teorico}`;
+      rows[i].children[3].textContent = `🧭 Teorico: ${teorico}`;
 
       const who = rows[i].children[1].querySelector("select").value;
 
-      // Mostra qui il debito calcolato dal giorno prima (C = giorno dopo)
       debtShown[i] = (i >= 1) ? formatDebt(currentDebt) : "";
 
       if (!who) continue;
-
-      // Giorni neutri: non contano e non modificano nulla
       if (NEUTRI.has(who)) continue;
 
       const expected = teorico;
 
-      // REGOLA CORRETTA:
-      // - Se uno va nel suo turno: NON cambia nulla (a meno che tu voglia altro)
-      // - Se uno va nel turno dell'altro:
-      //    - se è lui quello in debito => sta recuperando => -1
-      //    - altrimenti => furto => +1 debito per l'altro
       if (who === expected) {
         // turno normale: non modifica il debito
       } else {
         const whoLetter = letterFromName(who);
 
         if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
-          // RECUPERO
           currentDebt.n -= 1;
           if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
         } else {
-          // FURTO: crea debito per l'altro
           const debtFor = otherLetterFromName(who);
           if (currentDebt.n > 0 && currentDebt.who === debtFor) {
             currentDebt.n += 1;
@@ -179,13 +477,24 @@
       }
     }
 
-    // Scrivi colonna C
     for (let i = 0; i < rows.length; i++) {
-      rows[i].children[2].textContent = debtShown[i];
+      const txt = debtShown[i];
+      const tdC = rows[i].children[2];
+
+      // aggiorna solo se cambia (così l’animazione si vede meglio)
+      const prev = tdC.getAttribute("data-prev") || "";
+      if (prev !== txt) {
+        tdC.innerHTML = makeDebtBadge(txt);
+        tdC.setAttribute("data-prev", txt);
+      } else {
+        // se uguale, mantieni
+        if (!txt) tdC.innerHTML = "";
+      }
+
+      rows[i].classList.toggle("has-debt", !!txt);
     }
   }
 
-  // === ONLINE SAVE/LOAD (data.json via /api/data) ===
   function collectRows() {
     return Array.from(tbody.querySelectorAll("tr")).map(tr => {
       const date = tr.children[0].querySelector("input").value || "";
@@ -202,12 +511,12 @@
   }
 
   async function loadOnline() {
-    setStatus("Caricamento…");
+    setStatus("Caricamento…", "saving");
     const r = await fetch(API_URL, { cache: "no-store" });
     if (!r.ok) throw new Error("Load failed");
     const data = await r.json();
     applyRows(Array.isArray(data.rows) ? data.rows : []);
-    setStatus("Pronto");
+    setStatus("Pronto", "ready");
   }
 
   let saveTimer = null;
@@ -219,7 +528,7 @@
     saving = true;
     pending = false;
 
-    setStatus("Salvataggio…");
+    setStatus("Salvataggio…", "saving");
     const payload = { rows: collectRows() };
 
     const r = await fetch(API_URL, {
@@ -232,11 +541,11 @@
     saving = false;
 
     if (!r.ok) {
-      setStatus("Errore salvataggio");
+      setStatus("Errore salvataggio", "error");
       console.warn("Save failed", await r.text());
     } else {
-      setStatus("Salvato");
-      setTimeout(() => setStatus("Pronto"), 800);
+      setStatus("Salvato ✅", "ready");
+      setTimeout(() => setStatus("Pronto", "ready"), 900);
     }
 
     if (pending) saveOnlineNow();
@@ -247,7 +556,6 @@
     saveTimer = setTimeout(saveOnlineNow, 600);
   }
 
-  // === UI buttons ===
   btnAdd.addEventListener("click", () => { addRow(); recalc(); scheduleAutoSave(); });
   btnRecalc.addEventListener("click", () => { recalc(); });
   btnClear.addEventListener("click", () => {
@@ -257,10 +565,8 @@
     scheduleAutoSave();
   });
 
-  // prova ultimo salvataggio in chiusura (non sempre garantito su mobile, ma aiuta)
   window.addEventListener("beforeunload", () => { saveOnlineNow(); });
 
-  // === START: load online, se fallisce crea righe vuote ===
   (async () => {
     try {
       await loadOnline();
@@ -269,11 +575,13 @@
       tbody.innerHTML = "";
       for (let i = 0; i < 10; i++) addRow();
       recalc();
-      setStatus("Pronto");
+      setStatus("Pronto", "ready");
     }
   })();
 
 })();
 </script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
