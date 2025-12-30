@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Turni & Debiti</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
+    h1 { margin: 0 0 10px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px; align-items:center; }
+    button { padding: 8px 12px; cursor:pointer; }
+    table { border-collapse: collapse; width: 100%; max-width: 900px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
+    th { background:#f4f4f4; }
+    input, select { width: 100%; padding: 6px; box-sizing:border-box; }
+    .note { color:#555; margin-top: 10px; max-width: 900px; }
+    .small { font-size: 12px; color:#666; }
+    .status { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; }
+  </style>
+</head>
+<body>
+  <h1>Turni (Lorenzo/Francesco) + Debiti</h1>
+
+  <div class="row">
+    <button id="addRow">Aggiungi riga</button>
+    <button id="recalc">Ricalcola</button>
+    <button id="clear">Svuota</button>
+    <span id="status" class="status">Pronto</span>
+  </div>
+
+  <table id="t">
+    <thead>
+      <tr>
+        <th style="width: 160px;">Data</th>
+        <th style="width: 220px;">Chi è andato</th>
+        <th style="width: 180px;">Deve recuperare (giorno dopo)</th>
+        <th class="small">Turno teorico (info)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p class="note">
+    Regola chiave: la colonna <b>C</b> della riga <i>i</i> dipende dalla scelta fatta in <b>B</b> della riga <i>i-1</i>.
+    I giorni neutri non contano e non spezzano l’alternanza.
+  </p>
+
+<script>
+(function () {
+  // === CONFIG API (Vercel) ===
+  const API_URL = "/api/data";
+
+  const NEUTRI = new Set(["Campagna", "Mamma", "Zia", "Nonni"]);
+  const PERSONE = ["Lorenzo", "Francesco", "Campagna", "Mamma", "Zia", "Nonni"];
+
+  const tbody = document.querySelector("#t tbody");
+  const btnAdd = document.querySelector("#addRow");
+  const btnRecalc = document.querySelector("#recalc");
+  const btnClear = document.querySelector("#clear");
+  const statusEl = document.querySelector("#status");
+
+  function setStatus(txt) { statusEl.textContent = txt; }
+
+  function turnoTeoricoByRowIndex(rowNumber1Based) {
+    // Riga 2 = Lorenzo, Riga 3 = Francesco, Riga 4 = Lorenzo...
+    return (rowNumber1Based % 2 === 0) ? "Lorenzo" : "Francesco";
+  }
+
+  function formatDebt(d) {
+    if (!d || d.n <= 0 || !d.who) return "";
+    return String(d.n) + d.who;
+  }
+
+  function otherLetterFromName(name) {
+    // Se Lorenzo ruba -> deve recuperare Francesco => "F"
+    // Se Francesco ruba -> deve recuperare Lorenzo => "L"
+    if (name === "Lorenzo") return "F";
+    if (name === "Francesco") return "L";
+    return null;
+  }
+
+  function letterFromName(name) {
+    if (name === "Lorenzo") return "L";
+    if (name === "Francesco") return "F";
+    return null;
+  }
+
+  function addRow(data = "", who = "") {
+    const tr = document.createElement("tr");
+
+    const tdA = document.createElement("td");
+    const inpDate = document.createElement("input");
+    inpDate.type = "date";
+    inpDate.value = data;
+    tdA.appendChild(inpDate);
+
+    const tdB = document.createElement("td");
+    const sel = document.createElement("select");
+    const optEmpty = document.createElement("option");
+    optEmpty.value = "";
+    optEmpty.textContent = "—";
+    sel.appendChild(optEmpty);
+    for (const p of PERSONE) {
+      const o = document.createElement("option");
+      o.value = p;
+      o.textContent = p;
+      sel.appendChild(o);
+    }
+    sel.value = who;
+    tdB.appendChild(sel);
+
+    const tdC = document.createElement("td");
+    tdC.textContent = "";
+
+    const tdInfo = document.createElement("td");
+    tdInfo.className = "small";
+    tdInfo.textContent = "";
+
+    tr.appendChild(tdA);
+    tr.appendChild(tdB);
+    tr.appendChild(tdC);
+    tr.appendChild(tdInfo);
+
+    tbody.appendChild(tr);
+
+    sel.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
+    inpDate.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
+  }
+
+  // === CALCOLO DEBITI (REGOLA "GIORNO DOPO") ===
+  function recalc() {
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const debtShown = new Array(rows.length).fill("");
+
+    // debito corrente (che verrà mostrato sulla riga successiva)
+    let currentDebt = { n: 0, who: null };
+
+    for (let i = 0; i < rows.length; i++) {
+      const excelRowNumber = i + 2; // prima riga dati = riga 2
+      const teorico = turnoTeoricoByRowIndex(excelRowNumber);
+
+      rows[i].children[3].textContent = `Teorico: ${teorico}`;
+
+      const who = rows[i].children[1].querySelector("select").value;
+
+      // Mostra qui il debito calcolato dal giorno prima (C = giorno dopo)
+      debtShown[i] = (i >= 1) ? formatDebt(currentDebt) : "";
+
+      if (!who) continue;
+
+      // Giorni neutri: non contano e non modificano nulla
+      if (NEUTRI.has(who)) continue;
+
+      const expected = teorico;
+
+      // REGOLA CORRETTA:
+      // - Se uno va nel suo turno: NON cambia nulla (a meno che tu voglia altro)
+      // - Se uno va nel turno dell'altro:
+      //    - se è lui quello in debito => sta recuperando => -1
+      //    - altrimenti => furto => +1 debito per l'altro
+      if (who === expected) {
+        // turno normale: non modifica il debito
+      } else {
+        const whoLetter = letterFromName(who);
+
+        if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
+          // RECUPERO
+          currentDebt.n -= 1;
+          if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
+        } else {
+          // FURTO: crea debito per l'altro
+          const debtFor = otherLetterFromName(who);
+          if (currentDebt.n > 0 && currentDebt.who === debtFor) {
+            currentDebt.n += 1;
+          } else {
+            currentDebt = { n: 1, who: debtFor };
+          }
+        }
+      }
+    }
+
+    // Scrivi colonna C
+    for (let i = 0; i < rows.length; i++) {
+      rows[i].children[2].textContent = debtShown[i];
+    }
+  }
+
+  // === ONLINE SAVE/LOAD (data.json via /api/data) ===
+  function collectRows() {
+    return Array.from(tbody.querySelectorAll("tr")).map(tr => {
+      const date = tr.children[0].querySelector("input").value || "";
+      const who  = tr.children[1].querySelector("select").value || "";
+      return { date, who };
+    });
+  }
+
+  function applyRows(rows) {
+    tbody.innerHTML = "";
+    for (const r of rows) addRow(r.date || "", r.who || "");
+    if (rows.length === 0) for (let i = 0; i < 10; i++) addRow();
+    recalc();
+  }
+
+  async function loadOnline() {
+    setStatus("Caricamento…");
+    const r = await fetch(API_URL, { cache: "no-store" });
+    if (!r.ok) throw new Error("Load failed");
+    const data = await r.json();
+    applyRows(Array.isArray(data.rows) ? data.rows : []);
+    setStatus("Pronto");
+  }
+
+  let saveTimer = null;
+  let saving = false;
+  let pending = false;
+
+  async function saveOnlineNow() {
+    if (saving) { pending = true; return; }
+    saving = true;
+    pending = false;
+
+    setStatus("Salvataggio…");
+    const payload = { rows: collectRows() };
+
+    const r = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true
+    });
+
+    saving = false;
+
+    if (!r.ok) {
+      setStatus("Errore salvataggio");
+      console.warn("Save failed", await r.text());
+    } else {
+      setStatus("Salvato");
+      setTimeout(() => setStatus("Pronto"), 800);
+    }
+
+    if (pending) saveOnlineNow();
+  }
+
+  function scheduleAutoSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveOnlineNow, 600);
+  }
+
+  // === UI buttons ===
+  btnAdd.addEventListener("click", () => { addRow(); recalc(); scheduleAutoSave(); });
+  btnRecalc.addEventListener("click", () => { recalc(); });
+  btnClear.addEventListener("click", () => {
+    tbody.innerHTML = "";
+    for (let i = 0; i < 10; i++) addRow();
+    recalc();
+    scheduleAutoSave();
+  });
+
+  // prova ultimo salvataggio in chiusura (non sempre garantito su mobile, ma aiuta)
+  window.addEventListener("beforeunload", () => { saveOnlineNow(); });
+
+  // === START: load online, se fallisce crea righe vuote ===
+  (async () => {
+    try {
+      await loadOnline();
+    } catch (e) {
+      console.warn(e);
+      tbody.innerHTML = "";
+      for (let i = 0; i < 10; i++) addRow();
+      recalc();
+      setStatus("Pronto");
+    }
+  })();
+
+})();
+</script>
+</body>
+</html>
