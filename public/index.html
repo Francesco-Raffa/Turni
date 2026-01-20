@@ -492,56 +492,58 @@ html[data-bs-theme="light"] .form-control {
 
 function recalc() {
   const rows = Array.from(tbody.querySelectorAll("tr"));
-  const debtShown = new Array(rows.length).fill("");
 
-  // debito corrente (che verrà mostrato sulla riga successiva)
+  // Debito corrente che verrà mostrato sulla "riga successiva valida"
   let currentDebt = { n: 0, who: null };
 
-  for (let i = 0; i < rows.length; i++) {
-    const excelRowNumber = i + 2; // prima riga dati = riga 2
-    const teorico = turnoTeoricoByRowIndex(excelRowNumber);
-    rows[i].children[3].textContent = `🧭 Teorico: ${teorico}`;
+  // Turno teorico come STATO: parte da "Lorenzo" sulla prima riga valida (come la tua riga Excel 2)
+  let expected = "Lorenzo";
 
+  // Serve per mostrare il debito solo sulla prossima riga NON vuota (evita template vuoti)
+  let showDebtNextOnNonEmptyRow = false;
+
+  // cache di cosa mostrare in colonna C
+  const debtShown = new Array(rows.length).fill("");
+
+  for (let i = 0; i < rows.length; i++) {
     const dateVal = rows[i].children[0].querySelector("input").value;
     const whoVal  = rows[i].children[1].querySelector("select").value;
 
     const rowEmpty = !dateVal && !whoVal;
 
-    let prevEmpty = false;
-    if (i > 0) {
-      const prevDate = rows[i-1].children[0].querySelector("input").value;
-      const prevWho  = rows[i-1].children[1].querySelector("select").value;
-      prevEmpty = !prevDate && !prevWho;
-    }
+    // Info turno teorico: se riga vuota mostro un hint, altrimenti turno atteso corrente
+    rows[i].children[3].textContent = rowEmpty
+      ? "🧭 Teorico: —"
+      : `🧭 Teorico: ${expected}`;
 
-    // Mostra il debito sempre sulla riga "giorno dopo",
-    // ma se ci sono righe vuote consecutive, mostrala solo sulla prima.
-    if (rowEmpty && prevEmpty) {
-      debtShown[i] = "";
+    // === Mostra debito "il giorno dopo" SOLO sulla prima riga non vuota dopo l'evento ===
+    if (!rowEmpty && showDebtNextOnNonEmptyRow) {
+      debtShown[i] = formatDebt(currentDebt);
+      showDebtNextOnNonEmptyRow = false;
     } else {
-      debtShown[i] = (i >= 1) ? formatDebt(currentDebt) : "";
+      debtShown[i] = "";
     }
 
-    // Se non c'è una persona selezionata, non aggiornare il debito
+    // Se non c'è selezione persona, non aggiorno nulla
     if (!whoVal) continue;
 
-    // Giorni neutri: non contano e non spezzano l’alternanza
+    // Neutri: non contano, non spezzano alternanza, e NON devono far apparire "giorno dopo"
     if (NEUTRI.has(whoVal)) continue;
 
-    const expected = teorico;
+    // Qui siamo su una riga "valida" (Lorenzo o Francesco):
+    // imposto che il debito (risultante DOPO questa scelta) si mostri sulla prossima riga non vuota
+    showDebtNextOnNonEmptyRow = true;
 
-    if (whoVal === expected) {
-      // Turno normale: non modifica il debito
-    } else {
-      // Turno dell'altro: o recupero o furto
-      const whoLetter = letterFromName(whoVal);
+    // Logica debiti rispetto al turno atteso
+    if (whoVal !== expected) {
+      const whoLetter = letterFromName(whoVal); // L o F
 
       if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
         // RECUPERO
         currentDebt.n -= 1;
         if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
       } else {
-        // FURTO: crea debito per l'altro
+        // FURTO: crea/aumenta debito per l'altro
         const debtFor = otherLetterFromName(whoVal);
         if (currentDebt.n > 0 && currentDebt.who === debtFor) {
           currentDebt.n += 1;
@@ -550,13 +552,17 @@ function recalc() {
         }
       }
     }
+
+    // Avanza alternanza SOLO dopo una riga valida
+    expected = (expected === "Lorenzo") ? "Francesco" : "Lorenzo";
   }
 
-  // Scrivi colonna C + highlight riga
+  // Scrivi colonna C + highlight (meglio su cella, non su <tr>)
   for (let i = 0; i < rows.length; i++) {
     const txt = debtShown[i];
     const tdC = rows[i].children[2];
 
+    // aggiorna HTML badge solo se cambia
     const prev = tdC.getAttribute("data-prev") || "";
     if (prev !== txt) {
       tdC.innerHTML = makeDebtBadge(txt);
@@ -565,9 +571,11 @@ function recalc() {
       if (!txt) tdC.innerHTML = "";
     }
 
-    rows[i].classList.toggle("has-debt", !!txt);
+    // highlight robusto
+    tdC.classList.toggle("has-debt-cell", !!txt);
   }
 }
+
 
 
 function collectRows() {
