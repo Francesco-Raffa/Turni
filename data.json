@@ -1,16 +1,3 @@
 {
-  "rows": [
-    {
-      "date": "2026-01-12",
-      "who": "Lorenzo"
-    },
-    {
-      "date": "2026-01-13",
-      "who": "Campagna"
-    },
-    {
-      "date": "2026-01-14",
-      "who": "Lorenzo"
-    }
-  ]
+  "rows": []
 }
