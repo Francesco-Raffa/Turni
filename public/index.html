@@ -806,69 +806,71 @@ function collectRows() {
     });
   }
 
-  function recalc() {
-    const rows = Array.from(tbody.querySelectorAll("tr"));
+  //qui recalc
+	function recalc() {
+  const rows = Array.from(tbody.querySelectorAll("tr"));
 
-    // Si parte sempre da Lorenzo
-    let expected = "Lorenzo";
+  // Si parte sempre da Lorenzo
+  let expected = "Lorenzo";
 
-    // Debito aperto:
-    // { n: 4, who: "F" } => Francesco deve ancora andare 4 volte
-    let currentDebt = { n: 0, who: null };
+  // Debito aperto:
+  // { n: 3, who: "F" } => Francesco deve ancora andare 3 volte
+  let currentDebt = { n: 0, who: null };
 
-    for (let i = 0; i < rows.length; i++) {
-      const tr = rows[i];
-      const who = tr.children[1].querySelector("select").value;
+  for (let i = 0; i < rows.length; i++) {
+    const tr = rows[i];
+    const who = tr.children[1].querySelector("select").value;
 
-      tr.children[3].textContent = `Tocca a: ${expected}`;
+    tr.children[3].textContent = `Tocca a: ${expected}`;
 
-      // Riga vuota
-      if (!who) {
-        tr.children[2].textContent = formatDebt(currentDebt);
-        continue;
-      }
+    // Riga vuota
+    if (!who) {
+      tr.children[2].textContent = formatDebt(currentDebt);
+      continue;
+    }
 
-      // Giorno neutro
-      if (NEUTRI.has(who)) {
-        tr.children[2].textContent = formatDebt(currentDebt);
-        continue;
-      }
+    // Giorno neutro
+    if (NEUTRI.has(who)) {
+      tr.children[2].textContent = formatDebt(currentDebt);
+      continue;
+    }
 
-      // Caso corretto: va chi deve andare
-      if (who === expected) {
-        // Se chi va è in debito, recupera 1 presenza
-        if (currentDebt.n > 0 && currentDebt.who === letterFromName(who)) {
-          currentDebt.n--;
+    // Caso corretto: va chi deve andare
+    if (who === expected) {
+      // Se chi va è in debito, recupera 1 presenza
+      if (currentDebt.n > 0 && currentDebt.who === letterFromName(who)) {
+        currentDebt.n--;
 
-          if (currentDebt.n <= 0) {
-            currentDebt = { n: 0, who: null };
-            expected = otherPerson(who);
-          } else {
-            // Deve ancora recuperare: continua a toccare a lui
-            expected = who;
-          }
-        } else {
-          // Turno normale senza debiti
+        if (currentDebt.n <= 0) {
+          currentDebt = { n: 0, who: null };
           expected = otherPerson(who);
+        } else {
+          // Deve ancora recuperare: continua a toccare a lui
+          expected = who;
         }
       } else {
-        // Va la persona sbagliata:
-        // il debito di chi doveva andare aumenta di 2
-        const debtFor = letterFromName(expected);
+        // Turno normale senza debiti
+        expected = otherPerson(who);
+      }
+    } else {
+      // Va la persona sbagliata
+      const debtFor = letterFromName(expected);
 
-        if (currentDebt.n > 0 && currentDebt.who === debtFor) {
-          currentDebt.n += 2;
-        } else {
-          currentDebt = { n: 2, who: debtFor };
-        }
-
-        // Continua a toccare a chi era rimasto indietro
-        expected = expected;
+      if (currentDebt.n > 0 && currentDebt.who === debtFor) {
+        // Debito già aperto verso la stessa persona: +1
+        currentDebt.n += 1;
+      } else {
+        // Primo furto: crea debito 2
+        currentDebt = { n: 2, who: debtFor };
       }
 
-      tr.children[2].textContent = formatDebt(currentDebt);
+      // Continua a toccare a chi era rimasto indietro
+      expected = expected;
     }
+
+    tr.children[2].textContent = formatDebt(currentDebt);
   }
+}
 
   function collectRows() {
   return Array.from(tbody.querySelectorAll("tr"))
@@ -879,6 +881,8 @@ function collectRows() {
     })
     .filter(r => r.date || r.who);
 }
+
+	
   function applyRows(rows) {
     tbody.innerHTML = "";
 
