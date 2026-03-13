@@ -871,13 +871,14 @@ function collectRows() {
   }
 
   function collectRows() {
-    return Array.from(tbody.querySelectorAll("tr")).map(tr => {
+  return Array.from(tbody.querySelectorAll("tr"))
+    .map(tr => {
       const date = tr.children[0].querySelector("input").value || "";
       const who = tr.children[1].querySelector("select").value || "";
       return { date, who };
-    });
-  }
-
+    })
+    .filter(r => r.date || r.who);
+}
   function applyRows(rows) {
     tbody.innerHTML = "";
 
@@ -982,6 +983,7 @@ function collectRows() {
   })();
 
 })();
+	console.log("ultimo!");
 </script>
 </body>
 </html>
