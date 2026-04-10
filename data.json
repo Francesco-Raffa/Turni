@@ -1,32 +1,3 @@
 {
-  "rows": [
-    {
-      "date": "2026-03-15",
-      "who": "Lorenzo"
-    },
-    {
-      "date": "2026-03-16",
-      "who": "Francesco"
-    },
-    {
-      "date": "2026-03-16",
-      "who": "Francesco"
-    },
-    {
-      "date": "2026-03-17",
-      "who": "Zia"
-    },
-    {
-      "date": "2026-03-18",
-      "who": "Lorenzo"
-    },
-    {
-      "date": "2026-03-19",
-      "who": "Lorenzo"
-    },
-    {
-      "date": "",
-      "who": "Francesco"
-    }
-  ]
+  "rows": []
 }
