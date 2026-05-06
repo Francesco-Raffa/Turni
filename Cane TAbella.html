@@ -1,329 +1,543 @@
-<!--<!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Turni & Debiti</title>
-  <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-    h1 { margin: 0 0 10px; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px; align-items:center; }
-    button { padding: 8px 12px; cursor:pointer; }
-    table { border-collapse: collapse; width: 100%; max-width: 900px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
-    th { background:#f4f4f4; }
-    input, select { width: 100%; padding: 6px; box-sizing:border-box; }
-    .note { color:#555; margin-top: 10px; max-width: 900px; }
-    .small { font-size: 12px; color:#666; }
-    .status { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; }
-  </style>
-</head>
-<body>
-  <h1>Turni (Lorenzo/Francesco) + Debiti</h1>
-
-  <div class="row">
-    <button id="addRow">Aggiungi riga</button>
-    <button id="recalc">Ricalcola</button>
-    <button id="clear">Svuota</button>
-    <span id="status" class="status">Pronto</span>
-  </div>
-
-  <table id="t">
-    <thead>
-      <tr>
-        <th style="width: 160px;">Data</th>
-        <th style="width: 220px;">Chi è andato</th>
-        <th style="width: 180px;">Deve recuperare (giorno dopo)</th>
-        <th class="small">Turno teorico (info)</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <p class="note">
-    Regola chiave: la colonna <b>C</b> della riga <i>i</i> dipende dalla scelta fatta in <b>B</b> della riga <i>i-1</i>.
-    I giorni neutri non contano e non spezzano l’alternanza.
-  </p>
-
-<script>
-(function () {
-  // === CONFIG API (Vercel) ===
-  const API_URL = "/api/data";
-
-  const NEUTRI = new Set(["Campagna", "Mamma", "Zia", "Nonni"]);
-  const PERSONE = ["Lorenzo", "Francesco", "Campagna", "Mamma", "Zia", "Nonni"];
-
-  const tbody = document.querySelector("#t tbody");
-  const btnAdd = document.querySelector("#addRow");
-  const btnRecalc = document.querySelector("#recalc");
-  const btnClear = document.querySelector("#clear");
-  const statusEl = document.querySelector("#status");
-
-  function setStatus(txt) { statusEl.textContent = txt; }
-
-  function turnoTeoricoByRowIndex(rowNumber1Based) {
-    // Riga 2 = Lorenzo, Riga 3 = Francesco, Riga 4 = Lorenzo...
-    return (rowNumber1Based % 2 === 0) ? "Lorenzo" : "Francesco";
-  }
-
-  function formatDebt(d) {
-    if (!d || d.n <= 0 || !d.who) return "";
-    return String(d.n) + d.who;
-  }
-
-  function otherLetterFromName(name) {
-    // Se Lorenzo ruba -> deve recuperare Francesco => "F"
-    // Se Francesco ruba -> deve recuperare Lorenzo => "L"
-    if (name === "Lorenzo") return "F";
-    if (name === "Francesco") return "L";
-    return null;
-  }
-
-  function letterFromName(name) {
-    if (name === "Lorenzo") return "L";
-    if (name === "Francesco") return "F";
-    return null;
-  }
-
-  function addRow(data = "", who = "") {
-    const tr = document.createElement("tr");
-
-    const tdA = document.createElement("td");
-    const inpDate = document.createElement("input");
-    inpDate.type = "date";
-    inpDate.value = data;
-    tdA.appendChild(inpDate);
-
-    const tdB = document.createElement("td");
-    const sel = document.createElement("select");
-    const optEmpty = document.createElement("option");
-    optEmpty.value = "";
-    optEmpty.textContent = "—";
-    sel.appendChild(optEmpty);
-    for (const p of PERSONE) {
-      const o = document.createElement("option");
-      o.value = p;
-      o.textContent = p;
-      sel.appendChild(o);
-    }
-    sel.value = who;
-    tdB.appendChild(sel);
-
-    const tdC = document.createElement("td");
-    tdC.textContent = "";
-
-    const tdInfo = document.createElement("td");
-    tdInfo.className = "small";
-    tdInfo.textContent = "";
-
-    tr.appendChild(tdA);
-    tr.appendChild(tdB);
-    tr.appendChild(tdC);
-    tr.appendChild(tdInfo);
-
-    tbody.appendChild(tr);
-
-    sel.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
-    inpDate.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
-  }
-
-  // === CALCOLO DEBITI (REGOLA "GIORNO DOPO") ===
-  function recalc() {
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    const debtShown = new Array(rows.length).fill("");
-
-    // debito corrente (che verrà mostrato sulla riga successiva)
-    let currentDebt = { n: 0, who: null };
-
-    for (let i = 0; i < rows.length; i++) {
-      const excelRowNumber = i + 2; // prima riga dati = riga 2
-      const teorico = turnoTeoricoByRowIndex(excelRowNumber);
-
-      rows[i].children[3].textContent = `Teorico: ${teorico}`;
-
-      const who = rows[i].children[1].querySelector("select").value;
-
-      // Mostra qui il debito calcolato dal giorno prima (C = giorno dopo)
-      debtShown[i] = (i >= 1) ? formatDebt(currentDebt) : "";
-
-      if (!who) continue;
-
-      // Giorni neutri: non contano e non modificano nulla
-      if (NEUTRI.has(who)) continue;
-
-      const expected = teorico;
-
-      // REGOLA CORRETTA:
-      // - Se uno va nel suo turno: NON cambia nulla (a meno che tu voglia altro)
-      // - Se uno va nel turno dell'altro:
-      //    - se è lui quello in debito => sta recuperando => -1
-      //    - altrimenti => furto => +1 debito per l'altro
-      if (who === expected) {
-        // turno normale: non modifica il debito
-      } else {
-        const whoLetter = letterFromName(who);
-
-        if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
-          // RECUPERO
-          currentDebt.n -= 1;
-          if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
-        } else {
-          // FURTO: crea debito per l'altro
-          const debtFor = otherLetterFromName(who);
-          if (currentDebt.n > 0 && currentDebt.who === debtFor) {
-            currentDebt.n += 1;
-          } else {
-            currentDebt = { n: 1, who: debtFor };
-          }
-        }
-      }
-    }
-
-    // Scrivi colonna C
-    for (let i = 0; i < rows.length; i++) {
-      rows[i].children[2].textContent = debtShown[i];
-    }
-  }
-
-  // === ONLINE SAVE/LOAD (data.json via /api/data) ===
-  function collectRows() {
-    return Array.from(tbody.querySelectorAll("tr")).map(tr => {
-      const date = tr.children[0].querySelector("input").value || "";
-      const who  = tr.children[1].querySelector("select").value || "";
-      return { date, who };
-    });
-  }
-
-  function applyRows(rows) {
-    tbody.innerHTML = "";
-    for (const r of rows) addRow(r.date || "", r.who || "");
-    if (rows.length === 0) for (let i = 0; i < 10; i++) addRow();
-    recalc();
-  }
-
-  async function loadOnline() {
-    setStatus("Caricamento…");
-    const r = await fetch(API_URL, { cache: "no-store" });
-    if (!r.ok) throw new Error("Load failed");
-    const data = await r.json();
-    applyRows(Array.isArray(data.rows) ? data.rows : []);
-    setStatus("Pronto");
-  }
-
-  let saveTimer = null;
-  let saving = false;
-  let pending = false;
-
-  async function saveOnlineNow() {
-    if (saving) { pending = true; return; }
-    saving = true;
-    pending = false;
-
-    setStatus("Salvataggio…");
-    const payload = { rows: collectRows() };
-
-    const r = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      keepalive: true
-    });
-
-    saving = false;
-
-    if (!r.ok) {
-      setStatus("Errore salvataggio");
-      console.warn("Save failed", await r.text());
-    } else {
-      setStatus("Salvato");
-      setTimeout(() => setStatus("Pronto"), 800);
-    }
-
-    if (pending) saveOnlineNow();
-  }
-
-  function scheduleAutoSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveOnlineNow, 600);
-  }
-
-  // === UI buttons ===
-  btnAdd.addEventListener("click", () => { addRow(); recalc(); scheduleAutoSave(); });
-  btnRecalc.addEventListener("click", () => { recalc(); });
-  btnClear.addEventListener("click", () => {
-    tbody.innerHTML = "";
-    for (let i = 0; i < 10; i++) addRow();
-    recalc();
-    scheduleAutoSave();
-  });
-
-  // prova ultimo salvataggio in chiusura (non sempre garantito su mobile, ma aiuta)
-  window.addEventListener("beforeunload", () => { saveOnlineNow(); });
-
-  // === START: load online, se fallisce crea righe vuote ===
-  (async () => {
-    try {
-      await loadOnline();
-    } catch (e) {
-      console.warn(e);
-      tbody.innerHTML = "";
-      for (let i = 0; i < 10; i++) addRow();
-      recalc();
-      setStatus("Pronto");
-    }
-  })();
--->
-
-
-
-
 <!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Turni & Debiti</title>
-  <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-    h1 { margin: 0 0 10px; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px; align-items:center; }
-    button { padding: 8px 12px; cursor:pointer; }
-    table { border-collapse: collapse; width: 100%; max-width: 950px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
-    th { background:#f4f4f4; }
-    input, select { width: 100%; padding: 6px; box-sizing:border-box; }
-    .note { color:#555; margin-top: 10px; max-width: 950px; }
-    .small { font-size: 12px; color:#666; }
-    .status { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; }
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050816;
+    --card: rgba(255, 255, 255, 0.08);
+    --card-strong: rgba(255, 255, 255, 0.14);
+    --border: rgba(255, 255, 255, 0.16);
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --cyan: #22d3ee;
+    --blue: #3b82f6;
+    --violet: #8b5cf6;
+    --green: #22c55e;
+    --red: #fb7185;
+  }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(34, 211, 238, 0.28), transparent 28%),
+      radial-gradient(circle at 85% 20%, rgba(139, 92, 246, 0.28), transparent 30%),
+      radial-gradient(circle at 50% 95%, rgba(34, 197, 94, 0.16), transparent 28%),
+      linear-gradient(135deg, #020617 0%, #050816 45%, #111827 100%);
+    color: var(--text);
+    font-family: system-ui, Arial, sans-serif;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(circle at center, black, transparent 75%);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    width: 420px;
+    height: 420px;
+    left: -120px;
+    bottom: -120px;
+    background: radial-gradient(circle, rgba(34, 211, 238, 0.22), transparent 65%);
+    filter: blur(10px);
+    pointer-events: none;
+    animation: floatGlow 8s ease-in-out infinite alternate;
+  }
+
+  @keyframes floatGlow {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(80px, -50px) scale(1.15); }
+  }
+
+  .container {
+    max-width: 1250px;
+  }
+
+  .app-card {
+    border: 1px solid var(--border);
+    border-radius: 34px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(22px);
+    box-shadow:
+      0 30px 90px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255,255,255,0.12);
+    overflow: hidden;
+  }
+
+  .hero {
+    position: relative;
+    background:
+      linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(139, 92, 246, 0.22)),
+      rgba(255,255,255,0.04);
+    color: white;
+    padding: 38px;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: -80px;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.45), transparent 22%),
+      radial-gradient(circle at 80% 40%, rgba(139, 92, 246, 0.42), transparent 24%);
+    filter: blur(30px);
+    opacity: 0.75;
+  }
+
+  .hero > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero h1 {
+    font-weight: 900;
+    letter-spacing: -1px;
+    font-size: clamp(34px, 5vw, 58px);
+    text-shadow: 0 0 28px rgba(34, 211, 238, 0.35);
+  }
+
+  .hero p {
+    color: #dbeafe;
+    font-size: 17px;
+    margin-bottom: 0;
+  }
+
+  .toolbar {
+    background: rgba(2, 6, 23, 0.45);
+    padding: 22px 26px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .btn {
+    border-radius: 999px;
+    padding: 11px 20px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    border: 1px solid rgba(255,255,255,0.18);
+    transition: 0.2s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(34, 211, 238, 0.18);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--cyan), var(--blue));
+    border: 0;
+    color: #020617;
+  }
+
+  .btn-outline-primary {
+    color: var(--cyan);
+    border-color: rgba(34, 211, 238, 0.45);
+    background: rgba(34, 211, 238, 0.06);
+  }
+
+  .btn-outline-danger {
+    color: var(--red);
+    border-color: rgba(251, 113, 133, 0.45);
+    background: rgba(251, 113, 133, 0.06);
+  }
+
+  .status {
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.1);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    color: #a5f3fc;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 9px 16px;
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.12);
+  }
+
+  .table-wrap {
+    padding: 26px;
+    background: rgba(2, 6, 23, 0.28);
+  }
+
+  .table {
+    color: var(--text);
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+  }
+
+  thead th {
+    background: transparent !important;
+    color: #a5f3fc !important;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    border: 0 !important;
+    padding: 14px 16px !important;
+  }
+
+  tbody tr {
+    background: rgba(255, 255, 255, 0.055);
+    backdrop-filter: blur(12px);
+    transition: 0.18s ease;
+  }
+
+  tbody tr:hover {
+    background: rgba(34, 211, 238, 0.10);
+    transform: scale(1.006);
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.10);
+  }
+
+  tbody td {
+    border-top: 1px solid rgba(255,255,255,0.10) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+    padding: 16px !important;
+    vertical-align: middle;
+  }
+
+  tbody td:first-child {
+    border-left: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 18px 0 0 18px;
+  }
+
+  tbody td:last-child {
+    border-right: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 0 18px 18px 0;
+  }
+
+  input, select {
+    border-radius: 16px !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    padding: 12px 14px !important;
+    background-color: rgba(15, 23, 42, 0.82) !important;
+    color: white !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  input:focus, select:focus {
+    border-color: var(--cyan) !important;
+    box-shadow:
+      0 0 0 4px rgba(34, 211, 238, 0.14),
+      0 0 26px rgba(34, 211, 238, 0.22) !important;
+  }
+
+  select option {
+    background: #020617;
+    color: white;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.9;
+  }
+
+  .debt-cell {
+    font-weight: 950;
+    font-size: 22px;
+    color: #fda4af;
+    text-shadow: 0 0 18px rgba(251, 113, 133, 0.35);
+  }
+
+  .situation-cell {
+    font-size: 15px;
+    color: #e0f2fe;
+    font-weight: 800;
+  }
+
+  .note-box {
+    margin-top: 26px;
+    background:
+      linear-gradient(135deg, rgba(34, 211, 238, 0.10), rgba(139, 92, 246, 0.10)),
+      rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 20px 22px;
+    color: #dbeafe;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  .note-box strong {
+    color: white;
+  }
+
+  .badge-soft {
+    display: inline-block;
+    padding: 8px 13px;
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.14);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    color: #a5f3fc;
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.14);
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 28px;
+    }
+
+    .toolbar {
+      padding: 18px;
+    }
+
+    .table-wrap {
+      padding: 14px;
+    }
+
+    .btn {
+      width: 100%;
+    }
+
+    
+  }
+  
+  .table {
+  --bs-table-bg: transparent !important;
+  --bs-table-striped-bg: transparent !important;
+  --bs-table-hover-bg: transparent !important;
+  --bs-table-color: white !important;
+  background: transparent !important;
+}
+
+.table > :not(caption) > * > * {
+  background: transparent !important;
+  color: white !important;
+}
+
+tbody,
+thead,
+tr,
+td,
+th {
+  background: transparent !important;
+}
+
+.table-responsive {
+  background: transparent !important;
+}
+
+.table-responsive {
+  overflow-x: hidden !important;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.table {
+  min-width: unset !important;
+  width: 100% !important;
+}
+</style>
+ <!-- <style>
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(13, 110, 253, 0.18), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(25, 135, 84, 0.15), transparent 35%),
+        #f5f7fb;
+      font-family: system-ui, Arial, sans-serif;
+    }
+
+    .app-card {
+      border: 0;
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0d6efd, #20c997);
+      color: white;
+      padding: 32px;
+    }
+
+    .hero h1 {
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .hero p {
+      opacity: 0.9;
+      margin-bottom: 0;
+    }
+
+    .toolbar {
+      background: white;
+      padding: 20px 24px;
+      border-bottom: 1px solid #eef0f4;
+    }
+
+    .btn {
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-weight: 600;
+    }
+
+    .status {
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 14px;
+    }
+
+    .table-wrap {
+      padding: 24px;
+      background: white;
+    }
+
+    table {
+      overflow: hidden;
+      border-radius: 18px;
+    }
+
+    thead th {
+      background: #f8fafc !important;
+      color: #334155;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid #e5e7eb !important;
+    }
+
+    td, th {
+      vertical-align: middle;
+      padding: 14px !important;
+    }
+
+    tbody tr {
+      transition: 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background: #f8fbff;
+    }
+
+    input, select {
+      border-radius: 14px !important;
+      border: 1px solid #dbe1ea !important;
+      padding: 10px 12px !important;
+      background-color: #fff;
+    }
+
+    input:focus, select:focus {
+      border-color: #0d6efd !important;
+      box-shadow: 0 0 0 4px rgba(13,110,253,0.12) !important;
+    }
+
+    .debt-cell {
+      font-weight: 800;
+      font-size: 18px;
+      color: #dc3545;
+    }
+
+    .situation-cell {
+      font-size: 14px;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    .note-box {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 22px;
+      padding: 18px 20px;
+      color: #475569;
+    }
+
+    .badge-soft {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(13,110,253,0.1);
+      color: #0d6efd;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .hero {
+        padding: 24px;
+      }
+
+      .table-wrap {
+        padding: 12px;
+      }
+
+      td, th {
+        padding: 10px !important;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
   </style>
+  -->
 </head>
+
 <body>
-  <h1>Turni (Lorenzo/Francesco) + Debiti</h1>
+  <div class="container py-4 py-md-5">
+    <div class="card app-card">
+      <div class="hero">
+        <span class="badge-soft mb-3">Turni cane</span>
+        <h1 class="mb-2">Turni & Debiti</h1>
+        <p>Gestione 1:1 tra Lorenzo e Francesco. I neutri non contano.</p>
+      </div>
 
-  <div class="row">
-    <button id="addRow">Aggiungi riga</button>
-    <button id="recalc">Ricalcola</button>
-    <button id="clear">Svuota</button>
-    <span id="status" class="status">Pronto</span>
+      <div class="toolbar">
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
+          <div class="d-flex flex-column flex-md-row gap-2">
+            <button id="addRow" class="btn btn-primary">+ Aggiungi riga</button>
+            <button id="recalc" class="btn btn-outline-primary">Ricalcola</button>
+            <button id="clear" class="btn btn-outline-danger">Svuota</button>
+          </div>
+
+          <span id="status" class="status">Pronto</span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-responsive">
+          <table id="t" class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Data</th>
+                <th style="width: 240px;">Chi è andato</th>
+                <th style="width: 190px;">Debito attuale</th>
+                <th>Situazione</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="note-box mt-4">
+          <strong>Regola:</strong>
+          contano solo <strong>Lorenzo</strong> e <strong>Francesco</strong>.
+          Campagna, Mamma, Zia e Nonni sono neutri. Il rapporto deve rimanere
+          <strong>1:1</strong>.
+        </div>
+      </div>
+    </div>
   </div>
-
-  <table id="t">
-    <thead>
-      <tr>
-        <th style="width: 160px;">Data</th>
-        <th style="width: 220px;">Chi è andato</th>
-        <th style="width: 180px;">Debito attuale</th>
-        <th class="small">A chi tocca</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <p class="note">
-    Regola: Lorenzo e Francesco devono restare in rapporto <b>1:1</b>.
-    Se uno va al posto dell’altro, il debito aumenta di <b>2</b> così il recupero resta corretto anche nei giorni successivi.
-    <b>Campagna, Mamma, Zia e Nonni</b> sono neutri e non cambiano la logica.
-  </p>
 
 <script>
 (function () {
@@ -342,21 +556,18 @@
     statusEl.textContent = txt;
   }
 
-  function formatDebt(d) {
-    if (!d || d.n <= 0 || !d.who) return "";
-    return String(d.n) + d.who;
-  }
+  function calcolaDebito(conteggio) {
+    const diff = conteggio.Lorenzo - conteggio.Francesco;
 
-  function letterFromName(name) {
-    if (name === "Lorenzo") return "L";
-    if (name === "Francesco") return "F";
-    return null;
-  }
+    if (diff > 0) {
+      return diff + "F";
+    }
 
-  function otherPerson(name) {
-    if (name === "Lorenzo") return "Francesco";
-    if (name === "Francesco") return "Lorenzo";
-    return null;
+    if (diff < 0) {
+      return Math.abs(diff) + "L";
+    }
+
+    return "";
   }
 
   function addRow(data = "", who = "") {
@@ -366,10 +577,12 @@
     const inpDate = document.createElement("input");
     inpDate.type = "date";
     inpDate.value = data;
+    inpDate.className = "form-control";
     tdA.appendChild(inpDate);
 
     const tdB = document.createElement("td");
     const sel = document.createElement("select");
+    sel.className = "form-select";
 
     const optEmpty = document.createElement("option");
     optEmpty.value = "";
@@ -387,10 +600,11 @@
     tdB.appendChild(sel);
 
     const tdC = document.createElement("td");
+    tdC.className = "debt-cell";
     tdC.textContent = "";
 
     const tdInfo = document.createElement("td");
-    tdInfo.className = "small";
+    tdInfo.className = "situation-cell";
     tdInfo.textContent = "";
 
     tr.appendChild(tdA);
@@ -411,69 +625,99 @@
     });
   }
 
-  function recalc() {
-    const rows = Array.from(tbody.querySelectorAll("tr"));
+function recalc() {
+  const rows = Array.from(tbody.querySelectorAll("tr"));
 
-    // Si parte sempre da Lorenzo
-    let expected = "Lorenzo";
+  let ultimoValido = null;
 
-    // Debito aperto:
-    // { n: 4, who: "F" } => Francesco deve ancora andare 4 volte
-    let currentDebt = { n: 0, who: null };
+  let debito = {
+    who: null,
+    n: 0
+  };
 
-    for (let i = 0; i < rows.length; i++) {
-      const tr = rows[i];
-      const who = tr.children[1].querySelector("select").value;
+  for (const tr of rows) {
+    const who = tr.children[1].querySelector("select").value;
 
-      tr.children[3].textContent = `Tocca a: ${expected}`;
+    if (!who) {
+      tr.children[2].textContent = formatDebito(debito);
+      tr.children[3].textContent = "";
+      continue;
+    }
 
-      // Riga vuota
-      if (!who) {
-        tr.children[2].textContent = formatDebt(currentDebt);
-        continue;
-      }
+    if (NEUTRI.has(who)) {
+      tr.children[2].textContent = formatDebito(debito);
+      tr.children[3].textContent = "Neutro: non conta";
+      continue;
+    }
 
-      // Giorno neutro
-      if (NEUTRI.has(who)) {
-        tr.children[2].textContent = formatDebt(currentDebt);
-        continue;
-      }
+    if (ultimoValido === null) {
+      ultimoValido = who;
+      tr.children[2].textContent = "";
+      tr.children[3].textContent = "Primo turno valido";
+      continue;
+    }
 
-      // Caso corretto: va chi deve andare
-      if (who === expected) {
-        // Se chi va è in debito, recupera 1 presenza
-        if (currentDebt.n > 0 && currentDebt.who === letterFromName(who)) {
-          currentDebt.n--;
+    if (debito.n > 0) {
+      if (who === debito.who) {
+        debito.n--;
 
-          if (currentDebt.n <= 0) {
-            currentDebt = { n: 0, who: null };
-            expected = otherPerson(who);
-          } else {
-            // Deve ancora recuperare: continua a toccare a lui
-            expected = who;
-          }
+        if (debito.n === 0) {
+          tr.children[3].textContent = "Debito saldato";
+          debito.who = null;
+          ultimoValido = who;
         } else {
-          // Turno normale senza debiti
-          expected = otherPerson(who);
+          tr.children[3].textContent = who + " recupera un debito";
         }
       } else {
-        // Va la persona sbagliata:
-        // il debito di chi doveva andare aumenta di 2
-        const debtFor = letterFromName(expected);
-
-        if (currentDebt.n > 0 && currentDebt.who === debtFor) {
-          currentDebt.n += 2;
-        } else {
-          currentDebt = { n: 2, who: debtFor };
-        }
-
-        // Continua a toccare a chi era rimasto indietro
-        expected = expected;
+        debito.n++;
+        tr.children[3].textContent = debito.who + " deve recuperare";
       }
 
-      tr.children[2].textContent = formatDebt(currentDebt);
+      tr.children[2].textContent = formatDebito(debito);
+      continue;
     }
+
+    if (who === ultimoValido) {
+      const altro = who === "Lorenzo" ? "Francesco" : "Lorenzo";
+
+      debito.who = altro;
+      debito.n = 2;
+
+      tr.children[3].textContent = altro + " deve recuperare";
+    } else {
+      tr.children[3].textContent = "Turno corretto";
+      ultimoValido = who;
+    }
+
+    tr.children[2].textContent = formatDebito(debito);
   }
+}
+function formatDebito(debito) {
+  if (!debito.who || debito.n <= 0) {
+    return "";
+  }
+
+  if (debito.who === "Lorenzo") {
+    return debito.n + "L";
+  }
+
+  if (debito.who === "Francesco") {
+    return debito.n + "F";
+  }
+
+  return "";
+}
+function formatDebito(debiti) {
+  if (debiti.Lorenzo > 0) {
+    return debiti.Lorenzo + "L";
+  }
+
+  if (debiti.Francesco > 0) {
+    return debiti.Francesco + "F";
+  }
+
+  return "";
+}
 
   function collectRows() {
     return Array.from(tbody.querySelectorAll("tr")).map(tr => {
@@ -559,9 +803,7 @@
     scheduleAutoSave();
   });
 
-  btnRecalc.addEventListener("click", () => {
-    recalc();
-  });
+  btnRecalc.addEventListener("click", recalc);
 
   btnClear.addEventListener("click", () => {
     tbody.innerHTML = "";
@@ -586,10 +828,6 @@
     }
   })();
 
-})();
-</script>
-</body>
-</html>
 })();
 </script>
 </body>
