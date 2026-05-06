@@ -1,724 +1,543 @@
-<!--<!doctype html>
-<html lang="it" data-bs-theme="dark">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Turni & Debiti</title>
-
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-
-  <style>
-    /* Futuristic vibe */
-    body{
-      background:
-        radial-gradient(1200px 700px at 20% 10%, rgba(99,102,241,.25), transparent 55%),
-        radial-gradient(900px 600px at 85% 15%, rgba(16,185,129,.18), transparent 55%),
-        radial-gradient(900px 700px at 50% 90%, rgba(236,72,153,.14), transparent 60%),
-        linear-gradient(180deg, rgba(10,10,18,1), rgba(6,6,12,1));
-      min-height: 100vh;
-    }
-
-    .glass {
-      background: rgba(255,255,255,.06);
-      border: 1px solid rgba(255,255,255,.12);
-      box-shadow: 0 20px 60px rgba(0,0,0,.35);
-      backdrop-filter: blur(10px);
-    }
-
-    .neon {
-      text-shadow: 0 0 18px rgba(99,102,241,.45);
-      letter-spacing: .3px;
-    }
-
-    .hint { color: rgba(255,255,255,.70); }
-
-    .table thead th {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      background: rgba(20,20,30,.92) !important;
-      border-bottom: 1px solid rgba(255,255,255,.12) !important;
-    }
-    .table td, .table th { border-color: rgba(255,255,255,.10) !important; }
-
-    .form-control, .form-select {
-      background-color: rgba(255,255,255,.06) !important;
-      border-color: rgba(255,255,255,.15) !important;
-      color: inherit !important;
-    }
-    .form-control:focus, .form-select:focus {
-      border-color: rgba(99,102,241,.55) !important;
-      box-shadow: 0 0 0 .25rem rgba(99,102,241,.20) !important;
-    }
-
-    /* ===== Status badge: futuristico + spinner ===== */
-    .badge-status {
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.06);
-      position: relative;
-      overflow: hidden;
-    }
-    .badge-status::after{
-      content:"";
-      position:absolute; inset:-120% -40%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
-      transform: rotate(20deg);
-      animation: sheen 4.5s linear infinite;
-      opacity: .35;
-      pointer-events:none;
-    }
-    @keyframes sheen{
-      0%{ transform: translateX(-55%) rotate(20deg); }
-      100%{ transform: translateX(55%) rotate(20deg); }
-    }
-    .status-dot{
-      width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:.45rem;
-      background: rgba(16,185,129,.95);
-      box-shadow: 0 0 18px rgba(16,185,129,.35);
-      vertical-align: middle;
-    }
-    .status-saving .status-dot{
-      background: rgba(99,102,241,.95);
-      box-shadow: 0 0 18px rgba(99,102,241,.35);
-      animation: pulse 1s ease-in-out infinite;
-    }
-    .status-error .status-dot{
-      background: rgba(239,68,68,.95);
-      box-shadow: 0 0 18px rgba(239,68,68,.35);
-      animation: pulse 1s ease-in-out infinite;
-    }
-
-    /* ===== Debito badge: neon + scanline ===== */
-    .debt-badge{
-      display:inline-flex;
-      align-items:center;
-      gap:.45rem;
-      padding:.26rem .65rem;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.18);
-      background: rgba(255,255,255,.06);
-      font-weight: 800;
-      letter-spacing: .4px;
-      position: relative;
-      overflow:hidden;
-      transform: translateZ(0);
-    }
-    .debt-badge::after{
-      content:"";
-      position:absolute; left:-40%; top:-50%;
-      width: 40%; height: 200%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent);
-      transform: rotate(20deg);
-      animation: scan 2.8s linear infinite;
-      opacity:.25;
-      pointer-events:none;
-    }
-    @keyframes scan{
-      0%{ transform: translateX(-20%) rotate(20deg); }
-      100%{ transform: translateX(380%) rotate(20deg); }
-    }
-
-    .debt-dot{
-      width:8px; height:8px; border-radius:99px;
-      display:inline-block;
-      opacity:.95;
-    }
-
-    .debt-L{
-      border-color: rgba(99,102,241,.55);
-      box-shadow: 0 0 26px rgba(99,102,241,.16);
-    }
-    .debt-L .debt-dot{ background: rgba(99,102,241,.95); }
-
-    .debt-F{
-      border-color: rgba(236,72,153,.55);
-      box-shadow: 0 0 26px rgba(236,72,153,.14);
-    }
-    .debt-F .debt-dot{ background: rgba(236,72,153,.95); }
-
-    .debt-fire{
-      margin-left:.2rem;
-      filter: drop-shadow(0 0 10px rgba(255,180,0,.35));
-      animation: flicker 1.2s ease-in-out infinite;
-    }
-    @keyframes flicker{
-      0%, 100%{ transform: translateY(0); opacity: .95;}
-      50%{ transform: translateY(-1px); opacity: .75;}
-    }
-
-    /* ===== Row glow when has debt ===== */
-    tr.has-debt{
-      position: relative;
-      background: rgba(255,255,255,.03);
-    }
-    tr.has-debt::before{
-      content:"";
-      position:absolute; inset:0;
-      pointer-events:none;
-      background: radial-gradient(900px 80px at 15% 50%, rgba(99,102,241,.14), transparent 60%),
-                  radial-gradient(900px 80px at 85% 50%, rgba(236,72,153,.10), transparent 60%);
-      opacity: .65;
-    }
-
-    /* ===== Small animation when debt changes ===== */
-    .pop{
-      animation: pop .22s ease-out;
-    }
-    @keyframes pop{
-      0%{ transform: scale(.96); opacity:.7; }
-      100%{ transform: scale(1); opacity:1; }
-    }
-
-    @keyframes pulse{
-      0%{ transform: scale(1); opacity:1; }
-      50%{ transform: scale(1.25); opacity:.65; }
-      100%{ transform: scale(1); opacity:1; }
-    }
-
-    /* Light theme background */
-    html[data-bs-theme="light"] body{
-      background:
-        radial-gradient(1200px 700px at 20% 10%, rgba(59,130,246,.18), transparent 55%),
-        radial-gradient(900px 600px at 85% 15%, rgba(16,185,129,.12), transparent 55%),
-        radial-gradient(900px 700px at 50% 90%, rgba(236,72,153,.10), transparent 60%),
-        linear-gradient(180deg, rgba(248,250,252,1), rgba(241,245,249,1));
-    }
-    html[data-bs-theme="light"] .glass{
-      background: rgba(255,255,255,.75);
-      border: 1px solid rgba(2,6,23,.10);
-      box-shadow: 0 20px 60px rgba(2,6,23,.10);
-    }
-    html[data-bs-theme="light"] .hint{ color: rgba(2,6,23,.65); }
-    html[data-bs-theme="light"] .table thead th{
-      background: rgba(248,250,252,.92) !important;
-      border-bottom: 1px solid rgba(2,6,23,.10) !important;
-    }
-    html[data-bs-theme="light"] .badge-status{
-      border-color: rgba(2,6,23,.12);
-      background: rgba(2,6,23,.03);
-    }
-    html[data-bs-theme="light"] .debt-badge{
-      background: rgba(2,6,23,.04);
-      border-color: rgba(2,6,23,.12);
-    }
-    html[data-bs-theme="light"] tr.has-debt{
-      background: rgba(2,6,23,.03);
-    }
-
-	
-    /* MOBILE card layout */
-    @media (max-width: 576px) and (hover: none) and (pointer: coarse) {
-
-      h1 { font-size: 1.4rem; }
-
-      button, .btn {
-        width: 100%;
-        font-size: 0.95rem;
-        padding: 0.6rem 0.8rem;
-      }
-
-      .btn-group { width: 100%; }
-      .btn-group .btn { width: 50%; }
-
-      #status { width: 100%; text-align: center; margin-top: 0.5rem; }
-
-      table thead { display: none; }
-
-      table tbody tr {
-        display: block;
-        margin-bottom: 1rem;
-        border-radius: 0.8rem;
-        background: rgba(255,255,255,.06);
-        border: 1px solid rgba(255,255,255,.12);
-        padding: 0.6rem;
-      }
-
-      table tbody td {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.45rem 0;
-        border: none !important;
-        font-size: 0.9rem;
-      }
-
-      table tbody td::before {
-        content: attr(data-label);
-        font-weight: 700;
-        opacity: 0.85;
-        margin-right: 0.5rem;
-      }
-
-      input[type="date"], select { max-width: 55%; font-size: 0.9rem; }
-      .small, .hint { font-size: 0.75rem; opacity: 0.75; }
-    }
-	
-	/* ===== DESKTOP FORCE: la tabella deve restare una tabella ===== */
-@media (min-width: 992px) {
-  #t { display: table !important; width: 100% !important; table-layout: auto !important; }
-  #t thead { display: table-header-group !important; }
-  #t tbody { display: table-row-group !important; }
-  #t tr { display: table-row !important; width: auto !important; }
-  #t th, #t td { 
-    display: table-cell !important;
-    width: auto !important;
-    max-width: none !important;
-    white-space: nowrap;
-    vertical-align: middle;
-  }
-
-  /* disattiva etichette "card" */
-  #t td::before { content: none !important; }
-
-  /* il wrapper non deve “spostare” cose strane */
-  .table-responsive { overflow-x: auto !important; }
-}
-	/* ===== FIX SELECT COLOR (dark / light) ===== */
-
-/* default (dark theme) */
-.form-select,
-.form-control {
-  color: #fff !important;
-}
-
-/* dropdown options */
-.form-select option {
-  color: #111 !important;
-  background: #fff !important;
-}
-
-/* LIGHT THEME */
-html[data-bs-theme="light"] .form-select,
-html[data-bs-theme="light"] .form-control {
-  color: #111 !important;
-  background-color: rgba(255,255,255,.85) !important;
-  border-color: rgba(2,6,23,.15) !important;
-}
-
-/* focus */
-.form-select:focus,
-.form-control:focus {
-  box-shadow: 0 0 0 .25rem rgba(99,102,241,.20) !important;
-}
-
-	
-	
-  </style>
-</head>
-
-<body>
-  <div class="container py-4 py-md-5">
-    <div class="row justify-content-center">
-      <div class="col-12 col-xl-10">
-
-        <div class="glass rounded-4 p-3 p-md-4 mb-3">
-          <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
-            <div>
-              <h1 class="h3 h2-md mb-1 neon">Turni & Debiti</h1>
-              <div class="hint small">
-                Alternanza teorica + debiti/recuperi. La colonna “Deve recuperare” appare <b>il giorno dopo</b>.
-              </div>
-            </div>
-
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-              <div class="btn-group" role="group" aria-label="Tema">
-                <button id="themeDark" class="btn btn-sm btn-outline-light">🌙 Dark</button>
-                <button id="themeLight" class="btn btn-sm btn-outline-light">☀️ Light</button>
-              </div>
-
-              <span id="status" class="badge badge-status rounded-pill px-3 py-2">
-                <span id="statusDot" class="status-dot"></span>
-                <span id="statusText">Pronto</span>
-              </span>
-            </div>
-          </div>
-
-          <div class="d-flex flex-wrap gap-2 mt-3">
-            <button id="addRow" class="btn btn-primary">
-              ✚ Aggiungi riga
-            </button>
-            <button id="recalc" class="btn btn-outline-info">
-              🧠 Ricalcola
-            </button>
-            <button id="clear" class="btn btn-outline-danger">
-              🧹 Svuota
-            </button>
-          </div>
-        </div>
-
-        <div class="glass rounded-4 p-2 p-md-3">
-          <div class="table-responsive">
-            <table id="t" class="table table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th style="width: 160px;">Data</th>
-                  <th style="width: 220px;">Chi è andato</th>
-                  <th style="width: 200px;">Deve recuperare (giorno dopo)</th>
-                  <th class="small" style="width: 200px;">Turno teorico (info)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-
-          <div class="px-2 px-md-1 pt-3">
-            <p class="hint small mb-0">
-              Regola chiave: la colonna <b>C</b> della riga <i>i</i> dipende dalla scelta fatta in <b>B</b> della riga <i>i-1</i>.
-              I giorni neutri non contano e non spezzano l’alternanza.
-            </p>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-<script>
-(function () {
-  // ======== THEME (solo grafica, non tocca la logica) ========
-  function setTheme(t){
-    document.documentElement.setAttribute("data-bs-theme", t);
-    try { localStorage.setItem("theme", t); } catch {}
-  }
-  document.getElementById("themeDark").addEventListener("click", () => setTheme("dark"));
-  document.getElementById("themeLight").addEventListener("click", () => setTheme("light"));
-  try {
-    const saved = localStorage.getItem("theme");
-    if (saved === "light" || saved === "dark") setTheme(saved);
-  } catch {}
-
-  // === CONFIG API (Vercel) ===
-  const API_URL = "/api/data";
-
-  const NEUTRI = new Set(["Campagna", "Mamma", "Zia", "Nonni"]);
-  const PERSONE = ["Lorenzo", "Francesco", "Campagna", "Mamma", "Zia", "Nonni"];
-
-  const tbody = document.querySelector("#t tbody");
-  const btnAdd = document.querySelector("#addRow");
-  const btnRecalc = document.querySelector("#recalc");
-  const btnClear = document.querySelector("#clear");
-  const statusEl = document.querySelector("#status");
-  const statusTextEl = document.querySelector("#statusText");
-  const statusDotEl = document.querySelector("#statusDot");
-
-  function setStatus(txt, mode) {
-    // mode: "ready" | "saving" | "error" | "saved"
-    statusTextEl.textContent = txt;
-    statusEl.classList.remove("status-saving","status-error");
-    if (mode === "saving") statusEl.classList.add("status-saving");
-    if (mode === "error") statusEl.classList.add("status-error");
-  }
-
-  function turnoTeoricoByRowIndex(rowNumber1Based) {
-    return (rowNumber1Based % 2 === 0) ? "Lorenzo" : "Francesco";
-  }
-
-  function formatDebt(d) {
-    if (!d || d.n <= 0 || !d.who) return "";
-    return String(d.n) + d.who;
-  }
-
-  function otherLetterFromName(name) {
-    if (name === "Lorenzo") return "F";
-    if (name === "Francesco") return "L";
-    return null;
-  }
-
-  function letterFromName(name) {
-    if (name === "Lorenzo") return "L";
-    if (name === "Francesco") return "F";
-    return null;
-  }
-
-  function makeDebtBadge(txt){
-    if (!txt) return "";
-    const who = txt.slice(-1); // L o F
-    const n = parseInt(txt.slice(0, -1), 10) || 0;
-    const cls = who === "L" ? "debt-badge debt-L" : "debt-badge debt-F";
-    const safe = String(txt).replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    const fire = (n >= 3) ? `<span class="debt-fire">🔥</span>` : "";
-    const icon = (who === "L") ? "🅻" : "🅵";
-    return `<span class="${cls} pop"><span class="debt-dot"></span>${icon} ${safe}${fire}</span>`;
-  }
-
-  function addRow(data = "", who = "") {
-    const tr = document.createElement("tr");
-
-    const tdA = document.createElement("td");
-    tdA.setAttribute("data-label", "📅 Data");
-    const inpDate = document.createElement("input");
-    inpDate.type = "date";
-    inpDate.value = data;
-    inpDate.className = "form-control form-control-sm";
-    tdA.appendChild(inpDate);
-
-    const tdB = document.createElement("td");
-    tdB.setAttribute("data-label", "👤 Chi è andato");
-    const sel = document.createElement("select");
-    sel.className = "form-select form-select-sm";
-    const optEmpty = document.createElement("option");
-    optEmpty.value = "";
-    optEmpty.textContent = "—";
-    sel.appendChild(optEmpty);
-    for (const p of PERSONE) {
-      const o = document.createElement("option");
-      o.value = p;
-      o.textContent = p;
-      sel.appendChild(o);
-    }
-    sel.value = who;
-    tdB.appendChild(sel);
-
-    const tdC = document.createElement("td");
-    tdC.setAttribute("data-label", "🧾 Deve recuperare");
-    tdC.innerHTML = "";
-    tdC.className = "fw-semibold";
-
-    const tdInfo = document.createElement("td");
-    tdInfo.setAttribute("data-label", "🧭 Teorico");
-    tdInfo.className = "small hint";
-    tdInfo.textContent = "";
-
-    tr.appendChild(tdA);
-    tr.appendChild(tdB);
-    tr.appendChild(tdC);
-    tr.appendChild(tdInfo);
-
-    tbody.appendChild(tr);
-
-    sel.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
-    inpDate.addEventListener("change", () => { recalc(); scheduleAutoSave(); });
-  }
-
-function recalc() {
-  const rows = Array.from(tbody.querySelectorAll("tr"));
-
-  // Debito corrente che verrà mostrato sulla "riga successiva valida"
-  let currentDebt = { n: 0, who: null };
-
-  // Turno teorico come STATO: parte da "Lorenzo" sulla prima riga valida (come la tua riga Excel 2)
-  let expected = "Lorenzo";
-
-  // Serve per mostrare il debito solo sulla prossima riga NON vuota (evita template vuoti)
-  let showDebtNextOnNonEmptyRow = false;
-
-  // cache di cosa mostrare in colonna C
-  const debtShown = new Array(rows.length).fill("");
-
-  for (let i = 0; i < rows.length; i++) {
-    const dateVal = rows[i].children[0].querySelector("input").value;
-    const whoVal  = rows[i].children[1].querySelector("select").value;
-
-    const rowEmpty = !dateVal && !whoVal;
-
-    // Info turno teorico: se riga vuota mostro un hint, altrimenti turno atteso corrente
-    rows[i].children[3].textContent = rowEmpty
-      ? "🧭 Teorico: —"
-      : `🧭 Teorico: ${expected}`;
-
-    // === Mostra debito "il giorno dopo" SOLO sulla prima riga non vuota dopo l'evento ===
-    if (!rowEmpty && showDebtNextOnNonEmptyRow) {
-      debtShown[i] = formatDebt(currentDebt);
-      showDebtNextOnNonEmptyRow = false;
-    } else {
-      debtShown[i] = "";
-    }
-
-    // Se non c'è selezione persona, non aggiorno nulla
-    if (!whoVal) continue;
-
-    // Neutri: non contano, non spezzano alternanza, e NON devono far apparire "giorno dopo"
-    if (NEUTRI.has(whoVal)) continue;
-
-    // Qui siamo su una riga "valida" (Lorenzo o Francesco):
-    // imposto che il debito (risultante DOPO questa scelta) si mostri sulla prossima riga non vuota
-    showDebtNextOnNonEmptyRow = true;
-
-    // Logica debiti rispetto al turno atteso
-    if (whoVal !== expected) {
-      const whoLetter = letterFromName(whoVal); // L o F
-
-      if (currentDebt.n > 0 && currentDebt.who === whoLetter) {
-        // RECUPERO
-        currentDebt.n -= 1;
-        if (currentDebt.n <= 0) currentDebt = { n: 0, who: null };
-      } else {
-        // FURTO: crea/aumenta debito per l'altro
-        const debtFor = otherLetterFromName(whoVal);
-        if (currentDebt.n > 0 && currentDebt.who === debtFor) {
-          currentDebt.n += 1;
-        } else {
-          currentDebt = { n: 1, who: debtFor };
-        }
-      }
-    }
-
-    // Avanza alternanza SOLO dopo una riga valida
-    expected = (expected === "Lorenzo") ? "Francesco" : "Lorenzo";
-  }
-
-  // Scrivi colonna C + highlight (meglio su cella, non su <tr>)
-  for (let i = 0; i < rows.length; i++) {
-    const txt = debtShown[i];
-    const tdC = rows[i].children[2];
-
-    // aggiorna HTML badge solo se cambia
-    const prev = tdC.getAttribute("data-prev") || "";
-    if (prev !== txt) {
-      tdC.innerHTML = makeDebtBadge(txt);
-      tdC.setAttribute("data-prev", txt);
-    } else {
-      if (!txt) tdC.innerHTML = "";
-    }
-
-    // highlight robusto
-    tdC.classList.toggle("has-debt-cell", !!txt);
-  }
-}
-
-
-
-function collectRows() {
-  return Array.from(tbody.querySelectorAll("tr"))
-    .map(tr => {
-      const date = tr.children[0].querySelector("input").value || "";
-      const who  = tr.children[1].querySelector("select").value || "";
-      return { date, who };
-    })
-    .filter(r => r.date || r.who); // salva solo righe usate
-}
-
-
-  function applyRows(rows) {
-    tbody.innerHTML = "";
-    for (const r of rows) addRow(r.date || "", r.who || "");
-    if (rows.length === 0) for (let i = 0; i < 10; i++) addRow();
-    recalc();
-  }
-
-  async function loadOnline() {
-    setStatus("Caricamento…", "saving");
-    const r = await fetch(API_URL, { cache: "no-store" });
-    if (!r.ok) throw new Error("Load failed");
-    const data = await r.json();
-    applyRows(Array.isArray(data.rows) ? data.rows : []);
-    setStatus("Pronto", "ready");
-  }
-
-  let saveTimer = null;
-  let saving = false;
-  let pending = false;
-
-  async function saveOnlineNow() {
-    if (saving) { pending = true; return; }
-    saving = true;
-    pending = false;
-
-    setStatus("Salvataggio…", "saving");
-    const payload = { rows: collectRows() };
-
-    const r = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      keepalive: true
-    });
-
-    saving = false;
-
-    if (!r.ok) {
-      setStatus("Errore salvataggio", "error");
-      console.warn("Save failed", await r.text());
-    } else {
-      setStatus("Salvato ✅", "ready");
-      setTimeout(() => setStatus("Pronto", "ready"), 900);
-    }
-
-    if (pending) saveOnlineNow();
-  }
-
-  function scheduleAutoSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveOnlineNow, 600);
-  }
-
-  btnAdd.addEventListener("click", () => { addRow(); recalc(); scheduleAutoSave(); });
-  btnRecalc.addEventListener("click", () => { recalc(); });
-  btnClear.addEventListener("click", () => {
-    tbody.innerHTML = "";
-    for (let i = 0; i < 10; i++) addRow();
-    recalc();
-    scheduleAutoSave();
-  });
-
-  window.addEventListener("beforeunload", () => { saveOnlineNow(); });
-
-  (async () => {
-    try {
-      await loadOnline();
-    } catch (e) {
-      console.warn(e);
-      tbody.innerHTML = "";
-      for (let i = 0; i < 10; i++) addRow();
-      recalc();
-      setStatus("Pronto", "ready");
-    }
-  })();
-
-})();
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
--->
 <!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Turni & Debiti</title>
-  <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 20px; }
-    h1 { margin: 0 0 10px; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0 16px; align-items:center; }
-    button { padding: 8px 12px; cursor:pointer; }
-    table { border-collapse: collapse; width: 100%; max-width: 950px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align:left; }
-    th { background:#f4f4f4; }
-    input, select { width: 100%; padding: 6px; box-sizing:border-box; }
-    .note { color:#555; margin-top: 10px; max-width: 950px; }
-    .small { font-size: 12px; color:#666; }
-    .status { font-size: 12px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 999px; }
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050816;
+    --card: rgba(255, 255, 255, 0.08);
+    --card-strong: rgba(255, 255, 255, 0.14);
+    --border: rgba(255, 255, 255, 0.16);
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --cyan: #22d3ee;
+    --blue: #3b82f6;
+    --violet: #8b5cf6;
+    --green: #22c55e;
+    --red: #fb7185;
+  }
+
+  body {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 15% 10%, rgba(34, 211, 238, 0.28), transparent 28%),
+      radial-gradient(circle at 85% 20%, rgba(139, 92, 246, 0.28), transparent 30%),
+      radial-gradient(circle at 50% 95%, rgba(34, 197, 94, 0.16), transparent 28%),
+      linear-gradient(135deg, #020617 0%, #050816 45%, #111827 100%);
+    color: var(--text);
+    font-family: system-ui, Arial, sans-serif;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(circle at center, black, transparent 75%);
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    width: 420px;
+    height: 420px;
+    left: -120px;
+    bottom: -120px;
+    background: radial-gradient(circle, rgba(34, 211, 238, 0.22), transparent 65%);
+    filter: blur(10px);
+    pointer-events: none;
+    animation: floatGlow 8s ease-in-out infinite alternate;
+  }
+
+  @keyframes floatGlow {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(80px, -50px) scale(1.15); }
+  }
+
+  .container {
+    max-width: 1250px;
+  }
+
+  .app-card {
+    border: 1px solid var(--border);
+    border-radius: 34px;
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(22px);
+    box-shadow:
+      0 30px 90px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255,255,255,0.12);
+    overflow: hidden;
+  }
+
+  .hero {
+    position: relative;
+    background:
+      linear-gradient(135deg, rgba(34, 211, 238, 0.22), rgba(139, 92, 246, 0.22)),
+      rgba(255,255,255,0.04);
+    color: white;
+    padding: 38px;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: -80px;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.45), transparent 22%),
+      radial-gradient(circle at 80% 40%, rgba(139, 92, 246, 0.42), transparent 24%);
+    filter: blur(30px);
+    opacity: 0.75;
+  }
+
+  .hero > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero h1 {
+    font-weight: 900;
+    letter-spacing: -1px;
+    font-size: clamp(34px, 5vw, 58px);
+    text-shadow: 0 0 28px rgba(34, 211, 238, 0.35);
+  }
+
+  .hero p {
+    color: #dbeafe;
+    font-size: 17px;
+    margin-bottom: 0;
+  }
+
+  .toolbar {
+    background: rgba(2, 6, 23, 0.45);
+    padding: 22px 26px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .btn {
+    border-radius: 999px;
+    padding: 11px 20px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    border: 1px solid rgba(255,255,255,0.18);
+    transition: 0.2s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(34, 211, 238, 0.18);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--cyan), var(--blue));
+    border: 0;
+    color: #020617;
+  }
+
+  .btn-outline-primary {
+    color: var(--cyan);
+    border-color: rgba(34, 211, 238, 0.45);
+    background: rgba(34, 211, 238, 0.06);
+  }
+
+  .btn-outline-danger {
+    color: var(--red);
+    border-color: rgba(251, 113, 133, 0.45);
+    background: rgba(251, 113, 133, 0.06);
+  }
+
+  .status {
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.1);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    color: #a5f3fc;
+    font-size: 13px;
+    font-weight: 800;
+    padding: 9px 16px;
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.12);
+  }
+
+  .table-wrap {
+    padding: 26px;
+    background: rgba(2, 6, 23, 0.28);
+  }
+
+  .table {
+    color: var(--text);
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0 10px;
+  }
+
+  thead th {
+    background: transparent !important;
+    color: #a5f3fc !important;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.11em;
+    border: 0 !important;
+    padding: 14px 16px !important;
+  }
+
+  tbody tr {
+    background: rgba(255, 255, 255, 0.055);
+    backdrop-filter: blur(12px);
+    transition: 0.18s ease;
+  }
+
+  tbody tr:hover {
+    background: rgba(34, 211, 238, 0.10);
+    transform: scale(1.006);
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.10);
+  }
+
+  tbody td {
+    border-top: 1px solid rgba(255,255,255,0.10) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+    padding: 16px !important;
+    vertical-align: middle;
+  }
+
+  tbody td:first-child {
+    border-left: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 18px 0 0 18px;
+  }
+
+  tbody td:last-child {
+    border-right: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 0 18px 18px 0;
+  }
+
+  input, select {
+    border-radius: 16px !important;
+    border: 1px solid rgba(148, 163, 184, 0.28) !important;
+    padding: 12px 14px !important;
+    background-color: rgba(15, 23, 42, 0.82) !important;
+    color: white !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+
+  input:focus, select:focus {
+    border-color: var(--cyan) !important;
+    box-shadow:
+      0 0 0 4px rgba(34, 211, 238, 0.14),
+      0 0 26px rgba(34, 211, 238, 0.22) !important;
+  }
+
+  select option {
+    background: #020617;
+    color: white;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.9;
+  }
+
+  .debt-cell {
+    font-weight: 950;
+    font-size: 22px;
+    color: #fda4af;
+    text-shadow: 0 0 18px rgba(251, 113, 133, 0.35);
+  }
+
+  .situation-cell {
+    font-size: 15px;
+    color: #e0f2fe;
+    font-weight: 800;
+  }
+
+  .note-box {
+    margin-top: 26px;
+    background:
+      linear-gradient(135deg, rgba(34, 211, 238, 0.10), rgba(139, 92, 246, 0.10)),
+      rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 20px 22px;
+    color: #dbeafe;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  .note-box strong {
+    color: white;
+  }
+
+  .badge-soft {
+    display: inline-block;
+    padding: 8px 13px;
+    border-radius: 999px;
+    background: rgba(34, 211, 238, 0.14);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    color: #a5f3fc;
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 0 22px rgba(34, 211, 238, 0.14);
+  }
+
+  @media (max-width: 768px) {
+    .hero {
+      padding: 28px;
+    }
+
+    .toolbar {
+      padding: 18px;
+    }
+
+    .table-wrap {
+      padding: 14px;
+    }
+
+    .btn {
+      width: 100%;
+    }
+
+    
+  }
+  
+  .table {
+  --bs-table-bg: transparent !important;
+  --bs-table-striped-bg: transparent !important;
+  --bs-table-hover-bg: transparent !important;
+  --bs-table-color: white !important;
+  background: transparent !important;
+}
+
+.table > :not(caption) > * > * {
+  background: transparent !important;
+  color: white !important;
+}
+
+tbody,
+thead,
+tr,
+td,
+th {
+  background: transparent !important;
+}
+
+.table-responsive {
+  background: transparent !important;
+}
+
+.table-responsive {
+  overflow-x: hidden !important;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.table {
+  min-width: unset !important;
+  width: 100% !important;
+}
+</style>
+ <!-- <style>
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(13, 110, 253, 0.18), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(25, 135, 84, 0.15), transparent 35%),
+        #f5f7fb;
+      font-family: system-ui, Arial, sans-serif;
+    }
+
+    .app-card {
+      border: 0;
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0d6efd, #20c997);
+      color: white;
+      padding: 32px;
+    }
+
+    .hero h1 {
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .hero p {
+      opacity: 0.9;
+      margin-bottom: 0;
+    }
+
+    .toolbar {
+      background: white;
+      padding: 20px 24px;
+      border-bottom: 1px solid #eef0f4;
+    }
+
+    .btn {
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-weight: 600;
+    }
+
+    .status {
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 14px;
+    }
+
+    .table-wrap {
+      padding: 24px;
+      background: white;
+    }
+
+    table {
+      overflow: hidden;
+      border-radius: 18px;
+    }
+
+    thead th {
+      background: #f8fafc !important;
+      color: #334155;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid #e5e7eb !important;
+    }
+
+    td, th {
+      vertical-align: middle;
+      padding: 14px !important;
+    }
+
+    tbody tr {
+      transition: 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background: #f8fbff;
+    }
+
+    input, select {
+      border-radius: 14px !important;
+      border: 1px solid #dbe1ea !important;
+      padding: 10px 12px !important;
+      background-color: #fff;
+    }
+
+    input:focus, select:focus {
+      border-color: #0d6efd !important;
+      box-shadow: 0 0 0 4px rgba(13,110,253,0.12) !important;
+    }
+
+    .debt-cell {
+      font-weight: 800;
+      font-size: 18px;
+      color: #dc3545;
+    }
+
+    .situation-cell {
+      font-size: 14px;
+      color: #475569;
+      font-weight: 500;
+    }
+
+    .note-box {
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 22px;
+      padding: 18px 20px;
+      color: #475569;
+    }
+
+    .badge-soft {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(13,110,253,0.1);
+      color: #0d6efd;
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    @media (max-width: 768px) {
+      .hero {
+        padding: 24px;
+      }
+
+      .table-wrap {
+        padding: 12px;
+      }
+
+      td, th {
+        padding: 10px !important;
+      }
+
+      .btn {
+        width: 100%;
+      }
+    }
   </style>
+  -->
 </head>
+
 <body>
-  <h1>Turni (Lorenzo/Francesco) + Debiti</h1>
+  <div class="container py-4 py-md-5">
+    <div class="card app-card">
+      <div class="hero">
+        <span class="badge-soft mb-3">Turni cane</span>
+        <h1 class="mb-2">Turni & Debiti</h1>
+        <p>Gestione 1:1 tra Lorenzo e Francesco. I neutri non contano.</p>
+      </div>
 
-  <div class="row">
-    <button id="addRow">Aggiungi riga</button>
-    <button id="recalc">Ricalcola</button>
-    <button id="clear">Svuota</button>
-    <span id="status" class="status">Pronto</span>
+      <div class="toolbar">
+        <div class="d-flex flex-column flex-md-row gap-2 align-items-md-center justify-content-between">
+          <div class="d-flex flex-column flex-md-row gap-2">
+            <button id="addRow" class="btn btn-primary">+ Aggiungi riga</button>
+            <button id="recalc" class="btn btn-outline-primary">Ricalcola</button>
+            <button id="clear" class="btn btn-outline-danger">Svuota</button>
+          </div>
+
+          <span id="status" class="status">Pronto</span>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <div class="table-responsive">
+          <table id="t" class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Data</th>
+                <th style="width: 240px;">Chi è andato</th>
+                <th style="width: 190px;">Debito attuale</th>
+                <th>Situazione</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div class="note-box mt-4">
+          <strong>Regola:</strong>
+          contano solo <strong>Lorenzo</strong> e <strong>Francesco</strong>.
+          Campagna, Mamma, Zia e Nonni sono neutri. Il rapporto deve rimanere
+          <strong>1:1</strong>.
+        </div>
+      </div>
+    </div>
   </div>
-
-  <table id="t">
-    <thead>
-      <tr>
-        <th style="width: 160px;">Data</th>
-        <th style="width: 220px;">Chi è andato</th>
-        <th style="width: 180px;">Debito attuale</th>
-        <th class="small">A chi tocca</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <p class="note">
-    Regola: Lorenzo e Francesco devono restare in rapporto <b>1:1</b>.
-    Se uno va al posto dell’altro, il debito aumenta di <b>2</b> così il recupero resta corretto anche nei giorni successivi.
-    <b>Campagna, Mamma, Zia e Nonni</b> sono neutri e non cambiano la logica.
-  </p>
 
 <script>
 (function () {
@@ -737,21 +556,18 @@ function collectRows() {
     statusEl.textContent = txt;
   }
 
-  function formatDebt(d) {
-    if (!d || d.n <= 0 || !d.who) return "";
-    return String(d.n) + d.who;
-  }
+  function calcolaDebito(conteggio) {
+    const diff = conteggio.Lorenzo - conteggio.Francesco;
 
-  function letterFromName(name) {
-    if (name === "Lorenzo") return "L";
-    if (name === "Francesco") return "F";
-    return null;
-  }
+    if (diff > 0) {
+      return diff + "F";
+    }
 
-  function otherPerson(name) {
-    if (name === "Lorenzo") return "Francesco";
-    if (name === "Francesco") return "Lorenzo";
-    return null;
+    if (diff < 0) {
+      return Math.abs(diff) + "L";
+    }
+
+    return "";
   }
 
   function addRow(data = "", who = "") {
@@ -761,10 +577,12 @@ function collectRows() {
     const inpDate = document.createElement("input");
     inpDate.type = "date";
     inpDate.value = data;
+    inpDate.className = "form-control";
     tdA.appendChild(inpDate);
 
     const tdB = document.createElement("td");
     const sel = document.createElement("select");
+    sel.className = "form-select";
 
     const optEmpty = document.createElement("option");
     optEmpty.value = "";
@@ -782,10 +600,11 @@ function collectRows() {
     tdB.appendChild(sel);
 
     const tdC = document.createElement("td");
+    tdC.className = "debt-cell";
     tdC.textContent = "";
 
     const tdInfo = document.createElement("td");
-    tdInfo.className = "small";
+    tdInfo.className = "situation-cell";
     tdInfo.textContent = "";
 
     tr.appendChild(tdA);
@@ -806,83 +625,108 @@ function collectRows() {
     });
   }
 
-  //qui recalc
-	function recalc() {
+function recalc() {
   const rows = Array.from(tbody.querySelectorAll("tr"));
 
-  // Si parte sempre da Lorenzo
-  let expected = "Lorenzo";
+  let ultimoValido = null;
 
-  // Debito aperto:
-  // { n: 3, who: "F" } => Francesco deve ancora andare 3 volte
-  let currentDebt = { n: 0, who: null };
+  let debito = {
+    who: null,
+    n: 0
+  };
 
-  for (let i = 0; i < rows.length; i++) {
-    const tr = rows[i];
+  for (const tr of rows) {
     const who = tr.children[1].querySelector("select").value;
 
-    tr.children[3].textContent = `Tocca a: ${expected}`;
-
-    // Riga vuota
     if (!who) {
-      tr.children[2].textContent = formatDebt(currentDebt);
+      tr.children[2].textContent = formatDebito(debito);
+      tr.children[3].textContent = "";
       continue;
     }
 
-    // Giorno neutro
     if (NEUTRI.has(who)) {
-      tr.children[2].textContent = formatDebt(currentDebt);
+      tr.children[2].textContent = formatDebito(debito);
+      tr.children[3].textContent = "Neutro: non conta";
       continue;
     }
 
-    // Caso corretto: va chi deve andare
-    if (who === expected) {
-      // Se chi va è in debito, recupera 1 presenza
-      if (currentDebt.n > 0 && currentDebt.who === letterFromName(who)) {
-        currentDebt.n--;
+    if (ultimoValido === null) {
+      ultimoValido = who;
+      tr.children[2].textContent = "";
+      tr.children[3].textContent = "Primo turno valido";
+      continue;
+    }
 
-        if (currentDebt.n <= 0) {
-          currentDebt = { n: 0, who: null };
-          expected = otherPerson(who);
+    if (debito.n > 0) {
+      if (who === debito.who) {
+        debito.n--;
+
+        if (debito.n === 0) {
+          tr.children[3].textContent = "Debito saldato";
+          debito.who = null;
+          ultimoValido = who;
         } else {
-          // Deve ancora recuperare: continua a toccare a lui
-          expected = who;
+          tr.children[3].textContent = who + " recupera un debito";
         }
       } else {
-        // Turno normale senza debiti
-        expected = otherPerson(who);
-      }
-    } else {
-      // Va la persona sbagliata
-      const debtFor = letterFromName(expected);
-
-      if (currentDebt.n > 0 && currentDebt.who === debtFor) {
-        // Debito già aperto verso la stessa persona: +1
-        currentDebt.n += 1;
-      } else {
-        // Primo furto: crea debito 2
-        currentDebt = { n: 2, who: debtFor };
+        debito.n++;
+        tr.children[3].textContent = debito.who + " deve recuperare";
       }
 
-      // Continua a toccare a chi era rimasto indietro
-      expected = expected;
+      tr.children[2].textContent = formatDebito(debito);
+      continue;
     }
 
-    tr.children[2].textContent = formatDebt(currentDebt);
+    if (who === ultimoValido) {
+      const altro = who === "Lorenzo" ? "Francesco" : "Lorenzo";
+
+      debito.who = altro;
+      debito.n = 2;
+
+      tr.children[3].textContent = altro + " deve recuperare";
+    } else {
+      tr.children[3].textContent = "Turno corretto";
+      ultimoValido = who;
+    }
+
+    tr.children[2].textContent = formatDebito(debito);
   }
+}
+function formatDebito(debito) {
+  if (!debito.who || debito.n <= 0) {
+    return "";
+  }
+
+  if (debito.who === "Lorenzo") {
+    return debito.n + "L";
+  }
+
+  if (debito.who === "Francesco") {
+    return debito.n + "F";
+  }
+
+  return "";
+}
+function formatDebito(debiti) {
+  if (debiti.Lorenzo > 0) {
+    return debiti.Lorenzo + "L";
+  }
+
+  if (debiti.Francesco > 0) {
+    return debiti.Francesco + "F";
+  }
+
+  return "";
 }
 
   function collectRows() {
-  return Array.from(tbody.querySelectorAll("tr"))
-    .map(tr => {
+    return Array.from(tbody.querySelectorAll("tr")).map(tr => {
       const date = tr.children[0].querySelector("input").value || "";
       const who = tr.children[1].querySelector("select").value || "";
       return { date, who };
-    })
-    .filter(r => r.date || r.who);
-}
+    });
+  }
 
-	
   function applyRows(rows) {
     tbody.innerHTML = "";
 
@@ -959,9 +803,7 @@ function collectRows() {
     scheduleAutoSave();
   });
 
-  btnRecalc.addEventListener("click", () => {
-    recalc();
-  });
+  btnRecalc.addEventListener("click", recalc);
 
   btnClear.addEventListener("click", () => {
     tbody.innerHTML = "";
@@ -987,7 +829,6 @@ function collectRows() {
   })();
 
 })();
-	console.log("ultimo!");
 </script>
 </body>
 </html>
